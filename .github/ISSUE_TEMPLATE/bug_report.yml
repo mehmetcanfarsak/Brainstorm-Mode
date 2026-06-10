@@ -1,0 +1,79 @@
+name: Bug report
+description: Report something that isn't working as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the sections below so it can be reproduced quickly.
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent integration
+      description: Which agent integration are you using?
+      options:
+        - claude-code
+        - codex (stub)
+        - opencode (stub)
+        - other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I run /brainstorm, the Edit tool is still allowed...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or actions.
+      placeholder: |
+        1. Run `bash agents/claude-code/setup.sh --project .`
+        2. Start a session and run `/brainstorm caching`
+        3. Ask Claude to edit a file
+        4. The edit goes through instead of being blocked
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Output of `python3 --version`
+      placeholder: "Python 3.12.1"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.1 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant hook output or logs
+      description: |
+        Paste any hook output, error messages, or a sanitized drift-log entry.
+        Remove anything sensitive from file paths or session IDs.
+      render: shell
+    validations:
+      required: false

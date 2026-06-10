@@ -1,0 +1,15 @@
+InitialProjectGuide.md
+
+# Brainstorm-mode runtime state (per-project, not for version control)
+.claude/brainstorm/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Coverage
+.coverage
+.coverage.*
+*.cover
+htmlcov/

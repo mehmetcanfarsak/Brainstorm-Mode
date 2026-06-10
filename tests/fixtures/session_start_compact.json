@@ -1,0 +1,6 @@
+{
+  "session_id": "test-session-active",
+  "hook_event_name": "SessionStart",
+  "source": "compact",
+  "transcript_path": "/tmp/transcript.json"
+}

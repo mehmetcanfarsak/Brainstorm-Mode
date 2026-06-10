@@ -1,0 +1,6 @@
+{
+  "session_id": "test-session-new-after-resume",
+  "hook_event_name": "SessionStart",
+  "source": "resume",
+  "transcript_path": "/tmp/transcript.json"
+}

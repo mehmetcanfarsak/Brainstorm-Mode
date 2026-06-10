@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest an idea or a new agent integration
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Before submitting, please check the non-goals in the README
+        (no daemon, no bash-command classification, no config file in v1, no surviving `--resume`).
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of request
+      options:
+        - New agent integration (Codex, OpenCode, etc.)
+        - Enhancement to existing behavior
+        - Documentation improvement
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or pain point.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

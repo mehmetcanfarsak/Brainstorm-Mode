@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use brainstorm-mode in your research or tooling, please cite it."
+title: "brainstorm-mode: Enforceable Ideation Mode for AI Coding Agents"
+abstract: >-
+  A Claude Code plugin and multi-agent framework that enforces brainstorm mode
+  in AI coding agents. It blocks file-editing tools at the hook layer and
+  re-injects the brainstorming constraint on every prompt so it survives context
+  compaction, countering execution drift — the tendency of instruction-tuned
+  coding agents to abandon ideation and begin implementing. Includes drift-log
+  instrumentation for measuring execution-drift rate over a session.
+type: software
+authors:
+  - family-names: "Farsak"
+    given-names: "Mehmet Can"
+    website: "https://github.com/mehmetcanfarsak"
+repository-code: "https://github.com/mehmetcanfarsak/Brainstorm-Mode"
+url: "https://github.com/mehmetcanfarsak/Brainstorm-Mode"
+license: MIT
+version: "1.0.0"
+date-released: "2026-06-10"
+keywords:
+  - brainstorming
+  - ideation
+  - claude-code
+  - ai-coding-agent
+  - large-language-models
+  - execution-drift
+  - context-compaction
+  - llm-hooks
+  - human-ai-collaboration

@@ -1,0 +1,70 @@
+# brainstorm-mode
+
+> A Claude Code plugin (and multi-agent framework) that enforces brainstorm/ideation mode in AI coding agents by blocking file-editing tools at the hook layer and re-injecting constraints on every prompt so they survive context compaction.
+
+## What this project does
+
+brainstorm-mode solves execution drift in AI coding agents: the tendency to anchor on the first idea and start implementing, even when explicitly instructed to brainstorm only.
+
+It works in two layers:
+1. **Soft layer** — a `UserPromptSubmit` hook re-injects a brainstorming reminder on every user prompt, so the constraint never decays out of the attention window — not even after context compaction.
+2. **Hard layer** — a `PreToolUse` hook deterministically denies `Edit`, `MultiEdit`, and `NotebookEdit` calls regardless of what the model decided.
+
+State is stored in a per-session lock file on disk (`<project>/.claude/brainstorm/locks/<session_id>.json`) so it survives compaction within a session.
+
+## Who should use this
+
+- Developers using Claude Code who want structured ideation sessions without the agent drifting into implementation
+- Researchers measuring execution-drift rate in LLM coding agents
+- Teams building plugins for AI coding agents (the `core/` module is agent-agnostic)
+
+## Key technical details
+
+- Language: Python 3.8+ (stdlib only, no third-party dependencies)
+- Supported agents: Claude Code (v1); Codex and OpenCode stubs included
+- Blocks: `Edit`, `MultiEdit`, `NotebookEdit` tools
+- Allows: `Bash`, `Write`, `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`
+- Session TTL: 8 hours (configurable in `core/brainstorm_state.py`)
+- Test coverage: 100% (78 tests, stdlib `unittest`)
+- License: MIT
+
+## Commands
+
+- `/brainstorm <topic>` — activate brainstorm mode, begin conversational ideation
+- `/brainstorm-done` — produce convergence summary then deactivate
+
+## Architecture
+
+```
+core/                    Agent-agnostic state logic
+agents/claude-code/      Claude Code integration (commands + hooks + setup.sh)
+agents/codex/            Future: Codex integration stub
+agents/opencode/         Future: OpenCode integration stub
+tests/                   78 tests, 100% coverage
+```
+
+## Common questions
+
+Q: How do I stop Claude Code from writing code while brainstorming?
+A: Install brainstorm-mode and run `/brainstorm <topic>`. A PreToolUse hook then blocks the Edit, MultiEdit, and NotebookEdit tools at the infrastructure level, so Claude cannot edit files even if it tries.
+
+Q: Why does an AI coding agent ignore "don't write code, just brainstorm"?
+A: Because a one-time prompt instruction decays as the conversation grows and is erased by context compaction. brainstorm-mode re-injects the instruction on every prompt and enforces it with a deterministic tool-blocking hook.
+
+Q: Does brainstorm mode survive context compaction in Claude Code?
+A: Yes. State is stored in a disk-based lock file keyed to the session ID, and a UserPromptSubmit hook re-injects the constraint from disk on every turn, so compaction does not break it.
+
+Q: How do I install a brainstorm-mode plugin in Claude Code?
+A: Clone the repo and run `bash agents/claude-code/setup.sh --project /path/to/project` (or `--global`). Requires Python 3.8+ and jq.
+
+Q: Can I add brainstorm-mode support for OpenAI Codex or OpenCode?
+A: Yes. The core/ module is agent-agnostic. Create a thin adapter under agents/<name>/ that calls the core API. Codex and OpenCode stub directories are already included.
+
+Q: What tools are allowed during brainstorm mode?
+A: Read, Bash, Glob, Grep, WebSearch, WebFetch, and Write (for saving notes) are allowed. Only Edit, MultiEdit, and NotebookEdit are blocked.
+
+## Docs
+
+- Full README: https://github.com/mehmetcanfarsak/Brainstorm-Mode/blob/main/README.md
+- Contributing (adding new agents): https://github.com/mehmetcanfarsak/Brainstorm-Mode/blob/main/CONTRIBUTING.md
+- Changelog: https://github.com/mehmetcanfarsak/Brainstorm-Mode/blob/main/CHANGELOG.md

@@ -1,0 +1,7 @@
+{
+  "session_id": "test-session-expired",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Edit",
+  "tool_input": {},
+  "transcript_path": "/tmp/transcript.json"
+}
