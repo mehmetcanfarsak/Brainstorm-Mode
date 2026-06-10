@@ -28,6 +28,11 @@ State is stored in a per-session lock file on disk (`<project>/.claude/brainstor
 - Test coverage: 100% (78 tests, stdlib `unittest`)
 - License: MIT
 
+## Install
+
+- `/plugin marketplace add mehmetcanfarsak/Brainstorm-Mode`
+- `/plugin install brainstorm-mode@brainstorm-mode`
+
 ## Commands
 
 - `/brainstorm <topic>` — activate brainstorm mode, begin conversational ideation
@@ -55,7 +60,7 @@ Q: Does brainstorm mode survive context compaction in Claude Code?
 A: Yes. State is stored in a disk-based lock file keyed to the session ID, and a UserPromptSubmit hook re-injects the constraint from disk on every turn, so compaction does not break it.
 
 Q: How do I install a brainstorm-mode plugin in Claude Code?
-A: Clone the repo and run `bash agents/claude-code/setup.sh --project /path/to/project` (or `--global`). Requires Python 3.8+ and jq.
+A: Inside Claude Code run `/plugin marketplace add mehmetcanfarsak/Brainstorm-Mode` then `/plugin install brainstorm-mode@brainstorm-mode`. Alternatively, clone the repo and run `bash agents/claude-code/setup.sh --project /path/to/project` (requires Python 3.8+ and jq).
 
 Q: Can I add brainstorm-mode support for OpenAI Codex or OpenCode?
 A: Yes. The core/ module is agent-agnostic. Create a thin adapter under agents/<name>/ that calls the core API. Codex and OpenCode stub directories are already included.

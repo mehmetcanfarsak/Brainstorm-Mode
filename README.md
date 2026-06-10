@@ -63,14 +63,35 @@ A lock file at `<project>/.claude/brainstorm/locks/<session_id>.json` ties both 
 
 ## Installation (Claude Code)
 
-**Clone the repo:**
+### Option A — Plugin marketplace (recommended)
+
+The simplest way. Inside Claude Code, add this repo as a plugin marketplace and install:
+
+```
+/plugin marketplace add mehmetcanfarsak/Brainstorm-Mode
+/plugin install brainstorm-mode@brainstorm-mode
+```
+
+That's it — the commands and hooks are registered automatically, no `jq` or shell script needed. Manage it any time with `/plugin` (enable, disable, or uninstall).
+
+> The format is `/plugin install <plugin>@<marketplace>`. Here both are named `brainstorm-mode` (this repo is both the marketplace and the plugin), which is why it appears twice.
+
+To pin a specific version or branch:
+
+```
+/plugin marketplace add mehmetcanfarsak/Brainstorm-Mode#v1.0.0
+```
+
+### Option B — Install script
+
+If you prefer a manual install (or want to vendor the plugin into a project's `.claude/`):
 
 ```bash
 git clone https://github.com/mehmetcanfarsak/Brainstorm-Mode
 cd Brainstorm-Mode
 ```
 
-**Install into a specific project:**
+**Into a specific project:**
 
 ```bash
 bash agents/claude-code/setup.sh --project /path/to/your-project
@@ -78,7 +99,7 @@ bash agents/claude-code/setup.sh --project /path/to/your-project
 make install-project PROJECT=/path/to/your-project
 ```
 
-**Install globally** (all Claude Code sessions):
+**Globally** (all Claude Code sessions):
 
 ```bash
 bash agents/claude-code/setup.sh --global
@@ -92,7 +113,7 @@ The setup script:
 
 **Install `jq` if needed:** `brew install jq` · `apt install jq` · `choco install jq`
 
-**Uninstalling:**
+**Uninstalling the script install:**
 
 ```bash
 bash agents/claude-code/setup.sh --uninstall --project /path/to/your-project
@@ -223,7 +244,9 @@ Brainstorm-Mode/
 │   ├── fixtures/                      # Example hook-input JSON for manual testing
 │   └── run_tests.py                   # 78 tests, 100% line coverage, stdlib only
 │
-├── .claude-plugin/plugin.json         # Claude Code plugin manifest
+├── .claude-plugin/
+│   ├── plugin.json                    # Claude Code plugin manifest
+│   └── marketplace.json               # Marketplace catalog (enables /plugin install)
 ├── .github/                           # CI workflow, issue templates, PR template
 │
 ├── Makefile                           # test, coverage, install-project, install-global

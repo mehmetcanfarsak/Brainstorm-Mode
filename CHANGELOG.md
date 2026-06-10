@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-agent architecture**: agent-agnostic logic in `core/`, with thin
   per-agent adapters in `agents/<name>/`. Claude Code integration is complete;
   Codex and OpenCode stubs are included.
+- Claude Code plugin **marketplace distribution** via `.claude-plugin/marketplace.json`,
+  installable with `/plugin marketplace add` + `/plugin install`.
 - Idempotent `setup.sh` installer with `--project`, `--global`, and `--uninstall`.
 - Test suite: 78 tests, 100% line coverage, stdlib `unittest` only.
 - Project docs and metadata: README, CONTRIBUTING, SECURITY, LICENSE (MIT),
