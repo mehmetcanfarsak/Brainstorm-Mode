@@ -19,14 +19,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/opencode_smoke.ts` — a `bun` integration smoke test that drives every
   plugin hook against the real `core/` (block / allow / inject / re-anchor /
   env / unblock), no LLM required.
-- 29 new Python tests covering the OpenCode adapters (107 total, still 100% line
-  coverage); coverage now also measures `agents/opencode/hooks_scripts`.
+- **Reminder escalation** — once a session accumulates `ESCALATION_THRESHOLD`
+  (3) blocked edit attempts, the per-prompt reminder is prefixed with a sterner
+  line that names the count, computed from the drift log at hook time.
+- **Loud TTL expiry** — when a lock hits its 8-hour TTL, `read_lock` leaves a
+  one-shot tombstone so the next prompt announces "brainstorm mode expired,
+  editing unblocked" instead of silently re-enabling edits mid-session.
+- **Session transcript capture** — `/brainstorm-done` archives each session to
+  `.claude/brainstorm/sessions/<stamp>-<slug>.md` with topic, duration,
+  blocked-edit count, the full drift-event table, and the convergence handoff
+  (piped to `deactivate.py` on stdin).
+- A `bun`/Python smoke run plus unit tests bring the suite to 135 tests, still
+  100% line coverage; verified live end to end against OpenCode 1.17.3.
 
 ### Changed
 
 - `core/activate.py` and `core/deactivate.py` read agent-neutral
   `BRAINSTORM_SESSION_ID` / `BRAINSTORM_CWD` env vars, falling back to the
   existing `CLAUDE_*` vars (backward compatible).
+- `get_reminder(topic, drift_count=0)` gained an optional drift count; the
+  `UserPromptSubmit` / `chat.message` adapters now pass it for escalation.
+- `core/deactivate.py` reads an optional convergence handoff from stdin and
+  archives the session before unlocking editing tools.
 
 ## [1.0.0] - 2026-06-10
 

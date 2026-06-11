@@ -22,6 +22,22 @@ REMINDER_TEMPLATE = (
     'Exit with /brainstorm-done.'
 )
 
+# After this many blocked edit attempts in a session, the per-prompt reminder is
+# prefixed with a sterner escalation line (the model keeps trying to edit anyway).
+ESCALATION_THRESHOLD = 3
+
+ESCALATION_TEMPLATE = (
+    "ATTENTION: you have tried to use a blocked editing tool {n} times this session. "
+    "Every attempt was denied and will keep being denied while brainstorm mode is active. "
+    "Stop trying to edit — stay in ideation, or tell the user to run /brainstorm-done.\n\n"
+)
+
+EXPIRY_TEMPLATE = (
+    'Brainstorm mode on "{topic}" has expired (reached its {hours}-hour limit). '
+    "File-editing tools are unblocked again. "
+    "Run /brainstorm {topic} to resume, or just continue normally."
+)
+
 # ── Private path helpers ──────────────────────────────────────────────────────
 
 def _locks_dir(cwd):
@@ -39,8 +55,20 @@ def _drift_log_path(cwd):
 def _compact_flag_path(cwd, session_id):
     return os.path.join(_locks_dir(cwd), f"{session_id}.compact")
 
+def _expiry_path(cwd, session_id):
+    return os.path.join(_locks_dir(cwd), f"{session_id}.expired")
+
+def _sessions_dir(cwd):
+    return os.path.join(cwd, ".claude", "brainstorm", "sessions")
+
 def _ensure_dirs(cwd):
     os.makedirs(_locks_dir(cwd), exist_ok=True)
+
+def _slug(topic):
+    """Filesystem-safe slug for a topic; never empty."""
+    cleaned = "".join(c if c.isalnum() else "-" for c in topic.lower())
+    parts = [p for p in cleaned.split("-") if p]
+    return ("-".join(parts))[:60] or "session"
 
 def _now_utc():
     return datetime.now(timezone.utc)
@@ -93,6 +121,9 @@ def read_lock(cwd, session_id):
             return None
         created = _parse_iso(data["created_at"])
         if _now_utc() > created + timedelta(hours=data.get("ttl_hours", TTL_HOURS)):
+            # TTL reached: leave a tombstone so the next prompt can announce the
+            # expiry, then delete the lock (editing silently unblocks otherwise).
+            _mark_expired(cwd, session_id, data.get("topic", ""))
             os.remove(path)
             return None
         return data
@@ -200,8 +231,129 @@ def append_drift_log(cwd, session_id, topic, tool_name, created_at_iso, post_com
         pass
 
 
-def get_reminder(topic):
-    return REMINDER_TEMPLATE.format(topic=topic)
+def get_reminder(topic, drift_count=0):
+    """The per-prompt reminder. Escalates once a session has accumulated
+    ESCALATION_THRESHOLD or more blocked edit attempts."""
+    reminder = REMINDER_TEMPLATE.format(topic=topic)
+    if drift_count >= ESCALATION_THRESHOLD:
+        return ESCALATION_TEMPLATE.format(n=drift_count) + reminder
+    return reminder
+
+
+def _mark_expired(cwd, session_id, topic):
+    """Best-effort tombstone recording that a lock just hit its TTL."""
+    try:
+        with open(_expiry_path(cwd, session_id), "w") as f:
+            f.write(topic)
+    except OSError:
+        pass
+
+
+def pop_expiry_notice(cwd, session_id):
+    """If a lock for this session just expired, return its topic and clear the
+    tombstone (one-shot). Otherwise return None."""
+    path = _expiry_path(cwd, session_id)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            topic = f.read()
+    except OSError:
+        topic = ""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    return topic
+
+
+def get_expiry_notice(topic):
+    return EXPIRY_TEMPLATE.format(topic=topic, hours=TTL_HOURS)
+
+
+def _session_drift_records(cwd, session_id):
+    """All drift-log records for this session (list of dicts). Best-effort."""
+    path = _drift_log_path(cwd)
+    records = []
+    if not os.path.exists(path):
+        return records
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if rec.get("session_id") == session_id:
+                    records.append(rec)
+    except OSError:
+        pass
+    return records
+
+
+def count_session_drift(cwd, session_id):
+    """Number of blocked-edit attempts recorded for this session."""
+    return len(_session_drift_records(cwd, session_id))
+
+
+def archive_session(cwd, session_id, handoff_text=""):
+    """Write a durable markdown record of the session to sessions/<stamp>-<slug>.md.
+
+    Captures topic, start/end/duration, the convergence handoff (if provided),
+    and every blocked-edit (drift) event. Returns the path, or None if there is
+    no active lock to archive. Best-effort — never raises.
+    """
+    try:
+        lock = read_lock(cwd, session_id)
+        if not lock:
+            return None
+
+        topic = lock.get("topic", "")
+        created = lock["created_at"]
+        now = _now_utc()
+        duration_min = round((now - _parse_iso(created)).total_seconds() / 60.0, 1)
+        records = _session_drift_records(cwd, session_id)
+
+        sessions = _sessions_dir(cwd)
+        os.makedirs(sessions, exist_ok=True)
+        path = os.path.join(sessions, f"{now.strftime('%Y%m%d-%H%M%S')}-{_slug(topic)}.md")
+
+        handoff = handoff_text.strip() if handoff_text else ""
+        lines = [
+            f"# Brainstorm session: {topic}",
+            "",
+            f"- **Started:** {created}",
+            f"- **Ended:** {now.isoformat()}",
+            f"- **Duration:** {duration_min} min",
+            f"- **Blocked edit attempts:** {len(records)}",
+            "",
+            "## Convergence handoff",
+            "",
+            handoff or "_(no handoff text was captured)_",
+            "",
+            "## Execution-drift events",
+            "",
+        ]
+        if records:
+            lines.append("| minutes in | tool | post-compaction |")
+            lines.append("| --- | --- | --- |")
+            for r in records:
+                lines.append(
+                    f"| {r.get('minutes_since_activation', '?')} "
+                    f"| {r.get('tool_name', '?')} | {r.get('post_compaction', False)} |"
+                )
+        else:
+            lines.append("_None — no blocked edit attempts this session._")
+        lines.append("")
+
+        with open(path, "w") as f:
+            f.write("\n".join(lines))
+        return path
+    except Exception:
+        return None
 
 
 def find_recent_lock(cwd):

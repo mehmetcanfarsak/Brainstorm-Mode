@@ -25,7 +25,7 @@ State is stored in a per-session lock file on disk (`<project>/.claude/brainstor
 - Blocks: `Edit`, `MultiEdit`, `NotebookEdit` tools
 - Allows: `Bash`, `Write`, `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`
 - Session TTL: 8 hours (configurable in `core/brainstorm_state.py`)
-- Test coverage: 100% (107 tests, stdlib `unittest`)
+- Test coverage: 100% (135 tests, stdlib `unittest`)
 - License: MIT
 
 ## Install
@@ -45,7 +45,7 @@ core/                    Agent-agnostic state logic
 agents/claude-code/      Claude Code integration (commands + hooks + setup.sh)
 agents/codex/            Future: Codex integration stub
 agents/opencode/         Future: OpenCode integration stub
-tests/                   107 tests, 100% coverage
+tests/                   135 tests, 100% coverage
 ```
 
 ## Common questions

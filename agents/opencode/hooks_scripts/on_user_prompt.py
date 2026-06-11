@@ -19,7 +19,10 @@ sys.path.insert(0, _CORE)
 from brainstorm_state import (
     claim_pending_lock,
     cleanup_old_locks,
+    count_session_drift,
+    get_expiry_notice,
     get_reminder,
+    pop_expiry_notice,
     read_lock,
 )
 
@@ -49,7 +52,12 @@ def main():
                 lock = read_lock(cwd, session_id)
 
         if lock:
-            print(get_reminder(lock["topic"]))
+            print(get_reminder(lock["topic"], count_session_drift(cwd, session_id)))
+        else:
+            # No active lock — if one just hit its TTL, say so loudly.
+            expired_topic = pop_expiry_notice(cwd, session_id)
+            if expired_topic is not None:
+                print(get_expiry_notice(expired_topic))
     except Exception:
         pass
 

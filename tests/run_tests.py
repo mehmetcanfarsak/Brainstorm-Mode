@@ -225,10 +225,21 @@ class TestUserPrompt(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cwd:
             self.assertEqual(self._run(cwd, "s-none").strip(), "")
 
-    def test_expired_lock_no_output(self):
+    def test_expired_lock_announces_expiry(self):
         with tempfile.TemporaryDirectory() as cwd:
-            _make_lock(cwd, "s1", "old", hours_ago=9)
-            self.assertEqual(self._run(cwd, "s1").strip(), "")
+            _make_lock(cwd, "s1", "old topic", hours_ago=9)
+            out = self._run(cwd, "s1")
+            self.assertIn("expired", out.lower())
+            self.assertIn("old topic", out)
+
+    def test_escalated_reminder_after_threshold(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            lock = bs.write_lock(cwd, "s1", "topic")
+            for _ in range(bs.ESCALATION_THRESHOLD):
+                bs.append_drift_log(cwd, "s1", "topic", "Edit", lock["created_at"], False)
+            out = self._run(cwd, "s1")
+            self.assertIn("ATTENTION", out)
+            self.assertIn("BRAINSTORM MODE ACTIVE", out)
 
     def test_pending_lock_claimed_and_reminder_shown(self):
         with tempfile.TemporaryDirectory() as cwd:
@@ -372,7 +383,7 @@ class TestDeactivate(unittest.TestCase):
         buf = io.StringIO()
         env = {"CLAUDE_CWD": str(cwd), "CLAUDE_SESSION_ID": session_id}
         with redirect_stdout(buf):
-            rc = deactivate_mod.main(env=env)
+            rc = deactivate_mod.main(env=env, handoff="")
         return buf.getvalue(), rc
 
     def test_removes_active_lock(self):
@@ -687,7 +698,7 @@ class TestExceptionPaths(unittest.TestCase):
             env = {"CLAUDE_CWD": str(cwd), "CLAUDE_SESSION_ID": "s1"}
             with patch("deactivate.read_lock", side_effect=RuntimeError("boom")):
                 with redirect_stdout(buf):
-                    rc = deactivate_mod.main(env=env)
+                    rc = deactivate_mod.main(env=env, handoff="")
             self.assertEqual(rc, 1)
 
 
@@ -792,6 +803,19 @@ class TestOpenCodeUserPrompt(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cwd:
             self.assertEqual(self._run(cwd, "s-none").strip(), "")
 
+    def test_expired_lock_announces_expiry(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "old topic", hours_ago=9)
+            out = self._run(cwd, "s1")
+            self.assertIn("expired", out.lower())
+
+    def test_escalated_reminder_after_threshold(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            lock = bs.write_lock(cwd, "s1", "topic")
+            for _ in range(bs.ESCALATION_THRESHOLD):
+                bs.append_drift_log(cwd, "s1", "topic", "edit", lock["created_at"], False)
+            self.assertIn("ATTENTION", self._run(cwd, "s1"))
+
     def test_pending_lock_claimed_and_reminder_shown(self):
         with tempfile.TemporaryDirectory() as cwd:
             bs.write_pending_lock(cwd, "pending topic")
@@ -884,6 +908,227 @@ class TestAgentNeutralEnv(unittest.TestCase):
                 rc = deactivate_mod.main(env=env)
             self.assertEqual(rc, 0)
             self.assertFalse((_locks_dir(cwd) / "oc-sess.json").exists())
+
+
+# ── Tests: reminder escalation ────────────────────────────────────────────────
+
+class TestReminderEscalation(unittest.TestCase):
+
+    def test_reminder_normal_below_threshold(self):
+        out = bs.get_reminder("topic", bs.ESCALATION_THRESHOLD - 1)
+        self.assertIn("BRAINSTORM MODE ACTIVE", out)
+        self.assertNotIn("ATTENTION", out)
+
+    def test_reminder_default_count_is_zero(self):
+        self.assertNotIn("ATTENTION", bs.get_reminder("topic"))
+
+    def test_reminder_escalates_at_threshold(self):
+        out = bs.get_reminder("topic", bs.ESCALATION_THRESHOLD)
+        self.assertIn("ATTENTION", out)
+        self.assertIn(str(bs.ESCALATION_THRESHOLD), out)
+        self.assertIn("BRAINSTORM MODE ACTIVE", out)  # full reminder still present
+
+    def test_count_session_drift_no_log(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(bs.count_session_drift(cwd, "s1"), 0)
+
+    def test_count_session_drift_filters_by_session(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            lock = bs.write_lock(cwd, "s1", "t")
+            bs.append_drift_log(cwd, "s1", "t", "Edit", lock["created_at"], False)
+            bs.append_drift_log(cwd, "s1", "t", "Edit", lock["created_at"], False)
+            bs.append_drift_log(cwd, "other", "t", "Edit", lock["created_at"], False)
+            self.assertEqual(bs.count_session_drift(cwd, "s1"), 2)
+
+    def test_count_session_drift_skips_blank_and_corrupt(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs._ensure_dirs(cwd)
+            p = Path(bs._drift_log_path(cwd))
+            p.write_text('\n{bad json\n{"session_id": "s1"}\n{"session_id": "z"}\n')
+            self.assertEqual(bs.count_session_drift(cwd, "s1"), 1)
+
+    def test_count_session_drift_oserror_suppressed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs._ensure_dirs(cwd)
+            drift = str(bs._drift_log_path(cwd))
+            Path(drift).write_text('{"session_id": "s1"}\n')
+            real_open = builtins.open
+            def fake_open(f, *a, **kw):
+                if str(f) == drift:
+                    raise OSError("perm")
+                return real_open(f, *a, **kw)
+            with patch("builtins.open", side_effect=fake_open):
+                self.assertEqual(bs.count_session_drift(cwd, "s1"), 0)
+
+
+# ── Tests: loud TTL expiry ────────────────────────────────────────────────────
+
+class TestExpiryNotice(unittest.TestCase):
+
+    def test_read_lock_writes_expiry_marker(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "old topic", hours_ago=9)
+            self.assertIsNone(bs.read_lock(cwd, "s1"))
+            marker = _locks_dir(cwd) / "s1.expired"
+            self.assertTrue(marker.exists())
+            self.assertEqual(marker.read_text(), "old topic")
+
+    def test_pop_expiry_notice_returns_and_clears(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs._ensure_dirs(cwd)
+            bs._mark_expired(cwd, "s1", "the topic")
+            self.assertEqual(bs.pop_expiry_notice(cwd, "s1"), "the topic")
+            self.assertFalse((_locks_dir(cwd) / "s1.expired").exists())
+            # one-shot: second pop returns None
+            self.assertIsNone(bs.pop_expiry_notice(cwd, "s1"))
+
+    def test_pop_expiry_notice_none_when_absent(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertIsNone(bs.pop_expiry_notice(cwd, "nope"))
+
+    def test_get_expiry_notice_contains_topic(self):
+        notice = bs.get_expiry_notice("my topic")
+        self.assertIn("expired", notice.lower())
+        self.assertIn("my topic", notice)
+
+    def test_mark_expired_oserror_suppressed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs._ensure_dirs(cwd)
+            exp = str(bs._expiry_path(cwd, "s1"))
+            real_open = builtins.open
+            def fake_open(f, *a, **kw):
+                if str(f) == exp:
+                    raise OSError("perm")
+                return real_open(f, *a, **kw)
+            with patch("builtins.open", side_effect=fake_open):
+                bs._mark_expired(cwd, "s1", "topic")  # must not raise
+
+    def test_pop_expiry_read_oserror_yields_empty(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs._ensure_dirs(cwd)
+            exp = str(bs._expiry_path(cwd, "s1"))
+            Path(exp).write_text("topic")
+            real_open = builtins.open
+            def fake_open(f, *a, **kw):
+                if str(f) == exp:
+                    raise OSError("perm")
+                return real_open(f, *a, **kw)
+            with patch("builtins.open", side_effect=fake_open):
+                self.assertEqual(bs.pop_expiry_notice(cwd, "s1"), "")
+
+    def test_pop_expiry_remove_oserror_suppressed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs._ensure_dirs(cwd)
+            bs._mark_expired(cwd, "s1", "topic")
+            with patch.object(bs.os, "remove", side_effect=OSError("perm")):
+                self.assertEqual(bs.pop_expiry_notice(cwd, "s1"), "topic")
+
+
+# ── Tests: session archive (transcript capture) ───────────────────────────────
+
+class TestSessionArchive(unittest.TestCase):
+
+    def _sessions(self, cwd):
+        return Path(cwd) / ".claude" / "brainstorm" / "sessions"
+
+    def test_slug(self):
+        self.assertEqual(bs._slug("Caching Strategy!"), "caching-strategy")
+        self.assertEqual(bs._slug(""), "session")
+        self.assertEqual(bs._slug("@@@"), "session")
+        self.assertLessEqual(len(bs._slug("x" * 200)), 60)
+
+    def test_archive_writes_record_with_handoff_and_drift(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            lock = bs.write_lock(cwd, "s1", "caching strategy")
+            bs.append_drift_log(cwd, "s1", "caching strategy", "Edit", lock["created_at"], False)
+            bs.append_drift_log(cwd, "s1", "caching strategy", "MultiEdit", lock["created_at"], True)
+            path = bs.archive_session(cwd, "s1", "## Clusters\n- cluster A")
+            self.assertIsNotNone(path)
+            text = Path(path).read_text()
+            self.assertIn("caching strategy", text)
+            self.assertIn("cluster A", text)
+            self.assertIn("Blocked edit attempts:** 2", text)
+            self.assertIn("MultiEdit", text)
+            self.assertIn("Duration:", text)
+            self.assertTrue(Path(path).name.endswith("-caching-strategy.md"))
+
+    def test_archive_no_handoff_uses_placeholder(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic")
+            path = bs.archive_session(cwd, "s1", "")
+            self.assertIn("no handoff text", Path(path).read_text())
+
+    def test_archive_no_drift_shows_none(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic")
+            path = bs.archive_session(cwd, "s1", "handoff")
+            text = Path(path).read_text()
+            self.assertIn("Blocked edit attempts:** 0", text)
+            self.assertIn("no blocked edit attempts", text.lower())
+
+    def test_archive_no_lock_returns_none(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertIsNone(bs.archive_session(cwd, "nope", "handoff"))
+
+    def test_archive_exception_returns_none(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic")
+            with patch.object(bs.os, "makedirs", side_effect=OSError("perm")):
+                self.assertIsNone(bs.archive_session(cwd, "s1", "handoff"))
+
+
+# ── Tests: deactivate archives the session ────────────────────────────────────
+
+class TestDeactivateArchive(unittest.TestCase):
+
+    def _sessions(self, cwd):
+        return Path(cwd) / ".claude" / "brainstorm" / "sessions"
+
+    def test_deactivate_archives_with_handoff(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic")
+            env = {"BRAINSTORM_CWD": cwd, "BRAINSTORM_SESSION_ID": "s1"}
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = deactivate_mod.main(env=env, handoff="MY HANDOFF")
+            self.assertEqual(rc, 0)
+            self.assertIn("archived", buf.getvalue().lower())
+            self.assertFalse((_locks_dir(cwd) / "s1.json").exists())
+            files = list(self._sessions(cwd).glob("*.md"))
+            self.assertEqual(len(files), 1)
+            self.assertIn("MY HANDOFF", files[0].read_text())
+
+    def test_deactivate_reads_handoff_from_stdin(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic")
+            env = {"BRAINSTORM_CWD": cwd, "BRAINSTORM_SESSION_ID": "s1"}
+            buf = io.StringIO()
+            with patch.object(deactivate_mod.sys, "stdin", io.StringIO("piped handoff")):
+                with redirect_stdout(buf):
+                    rc = deactivate_mod.main(env=env)  # handoff=None → read stdin
+            self.assertEqual(rc, 0)
+            files = list(self._sessions(cwd).glob("*.md"))
+            self.assertIn("piped handoff", files[0].read_text())
+
+    def test_read_stdin_handoff_isatty_returns_empty(self):
+        class _TTY:
+            def isatty(self):
+                return True
+            def read(self):  # pragma: no cover - must not be called
+                return "X"
+        with patch.object(deactivate_mod.sys, "stdin", _TTY()):
+            self.assertEqual(deactivate_mod._read_stdin_handoff(), "")
+
+    def test_read_stdin_handoff_reads_content(self):
+        with patch.object(deactivate_mod.sys, "stdin", io.StringIO("hello handoff")):
+            self.assertEqual(deactivate_mod._read_stdin_handoff(), "hello handoff")
+
+    def test_read_stdin_handoff_exception_returns_empty(self):
+        class _Bad:
+            def isatty(self):
+                raise OSError("no stdin")
+        with patch.object(deactivate_mod.sys, "stdin", _Bad()):
+            self.assertEqual(deactivate_mod._read_stdin_handoff(), "")
 
 
 # ── Subprocess smoke tests ────────────────────────────────────────────────────

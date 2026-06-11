@@ -21,17 +21,27 @@ Choose one of:
 - "Enter plan mode with cluster `<X>`" — if one cluster is clearly the strongest path
 - "More divergence needed on `<Y>`" — if key questions remain unresolved
 
-## Step 2 — Deactivate the lock
+## Step 2 — Deactivate the lock (and archive the handoff)
 
-After the summary is fully written, run:
+After the summary is fully written, run the command below, **piping your handoff
+markdown to it on stdin** so it is saved into the session archive. Replace the
+content between the `HANDOFF` markers with the exact clusters + recommendation
+you just produced:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/core/deactivate.py"
+python3 "${CLAUDE_PLUGIN_ROOT}/core/deactivate.py" <<'HANDOFF'
+<paste your full convergence handoff markdown here>
+HANDOFF
 ```
+
+The script archives the session (topic, duration, blocked-edit count, drift
+events, and your handoff) to `.claude/brainstorm/sessions/` and prints the path,
+then unlocks editing.
 
 ## Step 3 — Confirm to the user
 
 Tell the user:
 - Brainstorm mode is **OFF**
 - `Edit`, `MultiEdit`, and `NotebookEdit` are now **unblocked**
+- Where the session was archived (the path printed by the script)
 - They can enter `/plan` mode or begin implementing the chosen cluster

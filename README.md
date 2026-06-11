@@ -50,7 +50,7 @@ A `PreToolUse` hook fires before `Edit`, `MultiEdit`, and `NotebookEdit` tool ca
 
 ### State storage
 
-A lock file at `<project>/.claude/brainstorm/locks/<session_id>.json` ties both layers together. The file persists across context compaction (same session ID) and is cleaned up automatically after 8 hours (TTL) or by `/brainstorm-done`.
+A lock file at `<project>/.claude/brainstorm/locks/<session_id>.json` ties both layers together. The file persists across context compaction (same session ID) and is cleaned up automatically after 8 hours (TTL) or by `/brainstorm-done`. When the TTL is reached the next prompt announces the expiry out loud (rather than silently re-enabling edits mid-session), and repeated blocked-edit attempts escalate the reminder to a sterner wording.
 
 ---
 
@@ -183,9 +183,10 @@ This produces a **convergence handoff** *before* unlocking tools:
 
 1. **Clusters** — 3–6 named idea clusters, each with: a one-line summary, the strongest idea in the cluster, and the key risk or unknown
 2. **Recommended next step** — either "enter plan mode with cluster X" or "more divergence needed on Y"
-3. **Unlock** — the lock file is deleted, editing tools become available again
+3. **Archive** — the session is written to `.claude/brainstorm/sessions/<date>-<topic>.md` with the topic, duration, blocked-edit count, the full drift-event table, and your convergence handoff
+4. **Unlock** — the lock file is deleted, editing tools become available again
 
-> Order is enforced by the command: summary first, deactivation second — the handoff is generated while the agent is still constrained.
+> Order is enforced by the command: summary first, deactivation second — the handoff is generated while the agent is still constrained, then archived as a durable artifact before tools unlock.
 
 ### Re-activating after context compaction
 
@@ -282,7 +283,7 @@ Brainstorm-Mode/
 │
 ├── tests/
 │   ├── fixtures/                      # Example hook-input JSON for manual testing
-│   └── run_tests.py                   # 107 tests, 100% line coverage, stdlib only
+│   └── run_tests.py                   # 135 tests, 100% line coverage, stdlib only
 │
 ├── .claude-plugin/
 │   ├── plugin.json                    # Claude Code plugin manifest
@@ -377,7 +378,7 @@ Key things to verify for each new agent: hook event names, tool name strings, th
 ## Testing
 
 ```bash
-make test       # run all 107 tests (no extra dependencies)
+make test       # run all 135 tests (no extra dependencies)
 make coverage   # run tests and print line coverage (100%)
 make clean      # remove __pycache__ and coverage artifacts
 ```
