@@ -4,7 +4,7 @@ test:
 	python3 tests/run_tests.py
 
 coverage:
-	python3 -m coverage run --source=core,agents/claude-code/hooks_scripts tests/run_tests.py
+	python3 -m coverage run --source=core,agents/claude-code/hooks_scripts,agents/opencode/hooks_scripts tests/run_tests.py
 	python3 -m coverage report --show-missing
 
 install-project:

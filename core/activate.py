@@ -3,9 +3,9 @@
 Activate brainstorm mode for the current session.
 Called by the /brainstorm command: python3 activate.py <topic...>
 
-Session ID is read from CLAUDE_SESSION_ID env var.
-If unavailable, a _pending lock is written and claimed by the next
-UserPromptSubmit hook invocation.
+Session ID is read from BRAINSTORM_SESSION_ID (agent-neutral) or, for backward
+compatibility, CLAUDE_SESSION_ID. If unavailable, a _pending lock is written and
+claimed by the next per-prompt hook invocation.
 """
 import os
 import sys
@@ -29,8 +29,8 @@ def main(argv=None, env=None):
         return 1
 
     topic = " ".join(argv[1:])
-    cwd = env.get("CLAUDE_CWD", os.getcwd())
-    session_id = env.get("CLAUDE_SESSION_ID", "").strip()
+    cwd = env.get("BRAINSTORM_CWD") or env.get("CLAUDE_CWD") or os.getcwd()
+    session_id = (env.get("BRAINSTORM_SESSION_ID") or env.get("CLAUDE_SESSION_ID", "")).strip()
 
     try:
         cleanup_old_locks(cwd)

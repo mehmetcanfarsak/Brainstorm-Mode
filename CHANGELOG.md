@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OpenCode integration** (`agents/opencode/`) — a thin TypeScript plugin that
+  reuses the same agent-agnostic `core/`:
+  - `tool.execute.before` throws to hard-block the `edit` and `patch` tools.
+  - `chat.message` re-injects the brainstorming reminder every turn.
+  - `experimental.session.compacting` re-anchors the topic across compaction.
+  - `shell.env` exposes the session id / cwd to the `/brainstorm` commands.
+  - `/brainstorm` and `/brainstorm-done` commands plus a `jq`-free `setup.sh`.
+- `tests/opencode_smoke.ts` — a `bun` integration smoke test that drives every
+  plugin hook against the real `core/` (block / allow / inject / re-anchor /
+  env / unblock), no LLM required.
+- 29 new Python tests covering the OpenCode adapters (107 total, still 100% line
+  coverage); coverage now also measures `agents/opencode/hooks_scripts`.
+
+### Changed
+
+- `core/activate.py` and `core/deactivate.py` read agent-neutral
+  `BRAINSTORM_SESSION_ID` / `BRAINSTORM_CWD` env vars, falling back to the
+  existing `CLAUDE_*` vars (backward compatible).
+
 ## [1.0.0] - 2026-06-10
 
 ### Added

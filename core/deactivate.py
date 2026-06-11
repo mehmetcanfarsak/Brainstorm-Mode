@@ -14,8 +14,8 @@ def main(env=None):
     """Returns 0 on success, 1 on error. Accepts optional env for testability."""
     env = os.environ if env is None else env
 
-    cwd = env.get("CLAUDE_CWD", os.getcwd())
-    session_id = env.get("CLAUDE_SESSION_ID", "").strip()
+    cwd = env.get("BRAINSTORM_CWD") or env.get("CLAUDE_CWD") or os.getcwd()
+    session_id = (env.get("BRAINSTORM_SESSION_ID") or env.get("CLAUDE_SESSION_ID", "")).strip()
 
     if not session_id:
         print("Brainstorm mode was not active (no session ID available).")

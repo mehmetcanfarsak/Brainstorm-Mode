@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-A Claude Code plugin (with a multi-agent architecture for Codex, OpenCode, and others) that **blocks file-editing tools at the hook layer** and **re-injects the brainstorming constraint on every prompt** — so ideation mode survives context compaction and cannot be talked out of.
+A plugin for **Claude Code and OpenCode** (with a multi-agent architecture ready for Codex and others) that **blocks file-editing tools at the hook layer** and **re-injects the brainstorming constraint on every prompt** — so ideation mode survives context compaction and cannot be talked out of.
 
 > **The core problem:** Ask an AI coding agent to brainstorm and it anchors on its first idea and starts implementing. A one-time "no code, just ideas" instruction decays as context grows and is destroyed entirely by compaction. brainstorm-mode enforces the constraint at the infrastructure level, not the prompt level.
 
@@ -227,9 +227,9 @@ The `PreToolUse` hook denies the `Edit` (or `MultiEdit`) call before it executes
 
 No. The hard layer (hook-level blocking) operates independently of the model's decisions. Even if Claude is convinced to attempt a file edit, the hook denies it. The model cannot disable its own hook.
 
-**Q: Does brainstorm-mode work with models other than Claude?**
+**Q: Does brainstorm-mode work with agents other than Claude Code?**
 
-The current implementation is for Claude Code. The `core/` module is agent-agnostic — adding Codex or OpenCode support means writing a thin adapter in `agents/<name>/` without touching the core logic.
+Yes — **Claude Code and OpenCode** are both supported (see [agents/opencode/](agents/opencode/)). The `core/` module is agent-agnostic; each agent is a thin adapter in `agents/<name>/` that translates its extension API to `core/` without touching the core logic. Codex is stubbed and ready for the same treatment.
 
 **Q: What is the drift log?**
 
@@ -272,12 +272,17 @@ Brainstorm-Mode/
 │   │   │   └── on_session_start.py    # SessionStart hook (compact re-anchor / resume notice)
 │   │   └── setup.sh                   # Install / uninstall script
 │   │
-│   ├── codex/README.md                # Stub — ready for Codex integration
-│   └── opencode/README.md             # Stub — ready for OpenCode integration
+│   ├── opencode/                      # OpenCode integration (TS plugin → core/)
+│   │   ├── plugin/brainstorm-mode.ts  # Thin plugin: throw-to-block, inject, re-anchor
+│   │   ├── commands/                  # /brainstorm, /brainstorm-done
+│   │   ├── hooks_scripts/             # Thin adapters that call into core/
+│   │   └── setup.sh                   # Install / uninstall (no jq needed)
+│   │
+│   └── codex/README.md                # Stub — ready for Codex integration
 │
 ├── tests/
 │   ├── fixtures/                      # Example hook-input JSON for manual testing
-│   └── run_tests.py                   # 78 tests, 100% line coverage, stdlib only
+│   └── run_tests.py                   # 107 tests, 100% line coverage, stdlib only
 │
 ├── .claude-plugin/
 │   ├── plugin.json                    # Claude Code plugin manifest
@@ -372,7 +377,7 @@ Key things to verify for each new agent: hook event names, tool name strings, th
 ## Testing
 
 ```bash
-make test       # run all 78 tests (no extra dependencies)
+make test       # run all 107 tests (no extra dependencies)
 make coverage   # run tests and print line coverage (100%)
 make clean      # remove __pycache__ and coverage artifacts
 ```

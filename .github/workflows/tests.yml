@@ -58,7 +58,7 @@ jobs:
         run: pip install coverage
 
       - name: Run tests with coverage
-        run: coverage run --source=core,agents/claude-code/hooks_scripts tests/run_tests.py
+        run: coverage run --source=core,agents/claude-code/hooks_scripts,agents/opencode/hooks_scripts tests/run_tests.py
 
       - name: Enforce 100% coverage
         run: coverage report --show-missing --fail-under=100

@@ -10,6 +10,7 @@ at the bottom verify the scripts actually work as standalone CLI programs.
 """
 import builtins
 import importlib
+import importlib.util
 import io
 import json
 import os
@@ -26,6 +27,7 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).parent.parent
 CORE = REPO_ROOT / "core"
 HOOKS = REPO_ROOT / "agents" / "claude-code" / "hooks_scripts"
+OPENCODE_HOOKS = REPO_ROOT / "agents" / "opencode" / "hooks_scripts"
 
 # Put core and hooks on sys.path so imports inside the modules resolve.
 for p in (str(CORE), str(HOOKS)):
@@ -40,6 +42,25 @@ import on_session_start
 import on_user_prompt
 import activate as activate_mod
 import deactivate as deactivate_mod
+
+
+def _load(name, path):
+    """Import a module from an explicit file path under a unique name.
+
+    The opencode adapters share filenames with the claude-code ones, so they are
+    loaded under distinct module names to avoid colliding in sys.modules while
+    still being measured by coverage (which tracks files, not module names).
+    """
+    spec = importlib.util.spec_from_file_location(name, str(path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# OpenCode adapters (thin shims with their own stdin/stdout contract).
+oc_pre_tool_use = _load("oc_on_pre_tool_use", OPENCODE_HOOKS / "on_pre_tool_use.py")
+oc_user_prompt = _load("oc_on_user_prompt", OPENCODE_HOOKS / "on_user_prompt.py")
+oc_session_start = _load("oc_on_session_start", OPENCODE_HOOKS / "on_session_start.py")
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -670,6 +691,201 @@ class TestExceptionPaths(unittest.TestCase):
             self.assertEqual(rc, 1)
 
 
+# ── Tests: opencode on_pre_tool_use ───────────────────────────────────────────
+
+class TestOpenCodePreToolUse(unittest.TestCase):
+    """OpenCode adapter: plain-text deny reason on stdout (non-empty = block)."""
+
+    def _run(self, cwd, session_id, tool_name):
+        return _call_hook(oc_pre_tool_use, {
+            "session_id": session_id, "cwd": str(cwd), "tool_name": tool_name,
+        })
+
+    def test_edit_blocked_when_active(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "my topic")
+            out = self._run(cwd, "s1", "edit")
+            self.assertIn("blocked", out.lower())
+            self.assertIn("my topic", out)
+
+    def test_patch_blocked_when_active(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            self.assertIn("blocked", self._run(cwd, "s1", "patch").lower())
+
+    def test_write_allowed_even_when_active(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            self.assertEqual(self._run(cwd, "s1", "write").strip(), "")
+
+    def test_bash_allowed_even_when_active(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            self.assertEqual(self._run(cwd, "s1", "bash").strip(), "")
+
+    def test_edit_allowed_when_no_lock(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(self._run(cwd, "s-none", "edit").strip(), "")
+
+    def test_expired_lock_allows_edit(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s-exp", "topic", hours_ago=9)
+            self.assertEqual(self._run(cwd, "s-exp", "edit").strip(), "")
+
+    def test_drift_log_appended_on_deny(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "log topic")
+            self._run(cwd, "s1", "edit")
+            log = Path(cwd) / ".claude" / "brainstorm" / "drift-log.jsonl"
+            record = json.loads(log.read_text().strip())
+            self.assertEqual(record["tool_name"], "edit")
+            self.assertEqual(record["topic"], "log topic")
+
+    def test_drift_log_post_compaction_flag(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            bs.set_compact_flag(cwd, "s1")
+            self._run(cwd, "s1", "patch")
+            log = Path(cwd) / ".claude" / "brainstorm" / "drift-log.jsonl"
+            self.assertTrue(json.loads(log.read_text().strip())["post_compaction"])
+
+    def test_corrupt_lock_treated_as_absent(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            d = _locks_dir(cwd)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "s1.json").write_text("{broken")
+            self.assertEqual(self._run(cwd, "s1", "edit").strip(), "")
+
+    def test_empty_session_id_allows_through(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            out = _call_hook(oc_pre_tool_use, {
+                "session_id": "", "cwd": str(cwd), "tool_name": "edit",
+            })
+            self.assertEqual(out.strip(), "")
+
+    def test_garbage_stdin_exits_clean(self):
+        self.assertEqual(_call_hook_raw(oc_pre_tool_use, "not json {{").strip(), "")
+
+    def test_inner_exception_suppressed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            with patch.object(oc_pre_tool_use, "read_lock", side_effect=RuntimeError("boom")):
+                out = self._run(cwd, "s1", "edit")
+            self.assertEqual(out.strip(), "")
+
+
+# ── Tests: opencode on_user_prompt ────────────────────────────────────────────
+
+class TestOpenCodeUserPrompt(unittest.TestCase):
+
+    def _run(self, cwd, session_id):
+        return _call_hook(oc_user_prompt, {"session_id": session_id, "cwd": str(cwd)})
+
+    def test_reminder_injected_when_active(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "cool topic")
+            out = self._run(cwd, "s1")
+            self.assertIn("BRAINSTORM MODE ACTIVE", out)
+            self.assertIn("cool topic", out)
+
+    def test_no_output_when_inactive(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(self._run(cwd, "s-none").strip(), "")
+
+    def test_pending_lock_claimed_and_reminder_shown(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_pending_lock(cwd, "pending topic")
+            out = self._run(cwd, "real-session")
+            self.assertIn("pending topic", out)
+            self.assertTrue((_locks_dir(cwd) / "real-session.json").exists())
+
+    def test_empty_session_id_no_output(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(_call_hook(oc_user_prompt, {"session_id": "", "cwd": str(cwd)}).strip(), "")
+
+    def test_garbage_stdin_exits_clean(self):
+        self.assertEqual(_call_hook_raw(oc_user_prompt, "not json").strip(), "")
+
+    def test_inner_exception_suppressed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            with patch.object(oc_user_prompt, "read_lock", side_effect=RuntimeError("boom")):
+                self.assertEqual(self._run(cwd, "s1").strip(), "")
+
+
+# ── Tests: opencode on_session_start ──────────────────────────────────────────
+
+class TestOpenCodeSessionStart(unittest.TestCase):
+
+    def _run(self, cwd, session_id, source):
+        return _call_hook(oc_session_start, {
+            "session_id": session_id, "cwd": str(cwd), "source": source,
+        })
+
+    def test_compact_reinjects_anchor(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "compact topic")
+            out = self._run(cwd, "s1", "compact")
+            self.assertIn("still active", out)
+            self.assertIn("compact topic", out)
+
+    def test_compact_sets_flag(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            self._run(cwd, "s1", "compact")
+            self.assertTrue((_locks_dir(cwd) / "s1.compact").exists())
+
+    def test_compact_no_output_when_inactive(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(self._run(cwd, "s1", "compact").strip(), "")
+
+    def test_non_compact_source_no_output(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            self.assertEqual(self._run(cwd, "s1", "other").strip(), "")
+
+    def test_empty_session_id_no_output(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            out = _call_hook(oc_session_start, {
+                "session_id": "", "cwd": str(cwd), "source": "compact",
+            })
+            self.assertEqual(out.strip(), "")
+
+    def test_garbage_stdin_exits_clean(self):
+        self.assertEqual(_call_hook_raw(oc_session_start, "not json").strip(), "")
+
+    def test_inner_exception_suppressed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "topic")
+            with patch.object(oc_session_start, "read_lock", side_effect=RuntimeError("boom")):
+                self.assertEqual(self._run(cwd, "s1", "compact").strip(), "")
+
+
+# ── Tests: agent-neutral env vars (BRAINSTORM_* takes precedence) ──────────────
+
+class TestAgentNeutralEnv(unittest.TestCase):
+
+    def test_activate_reads_brainstorm_env(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            buf = io.StringIO()
+            env = {"BRAINSTORM_CWD": str(cwd), "BRAINSTORM_SESSION_ID": "oc-sess"}
+            with redirect_stdout(buf):
+                rc = activate_mod.main(argv=["activate.py", "neutral topic"], env=env)
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "oc-sess.json").read_text())
+            self.assertEqual(data["topic"], "neutral topic")
+
+    def test_deactivate_reads_brainstorm_env(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "oc-sess", "topic")
+            buf = io.StringIO()
+            env = {"BRAINSTORM_CWD": str(cwd), "BRAINSTORM_SESSION_ID": "oc-sess"}
+            with redirect_stdout(buf):
+                rc = deactivate_mod.main(env=env)
+            self.assertEqual(rc, 0)
+            self.assertFalse((_locks_dir(cwd) / "oc-sess.json").exists())
+
+
 # ── Subprocess smoke tests ────────────────────────────────────────────────────
 # Verify scripts actually work as standalone CLI programs.
 
@@ -724,6 +940,26 @@ class TestSubprocessSmoke(unittest.TestCase):
             self.assertEqual(r.returncode, 0)
             data = json.loads((_locks_dir(cwd) / "s1.json").read_text())
             self.assertEqual(data["topic"], "smoke topic")
+
+    def test_opencode_pre_tool_use_blocks_edit_subprocess(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "smoke topic")
+            out, rc = self._run_script(
+                OPENCODE_HOOKS / "on_pre_tool_use.py",
+                {"session_id": "s1", "cwd": cwd, "tool_name": "edit"},
+            )
+            self.assertEqual(rc, 0)
+            self.assertIn("blocked", out.lower())
+
+    def test_opencode_user_prompt_subprocess(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _make_lock(cwd, "s1", "smoke")
+            out, rc = self._run_script(
+                OPENCODE_HOOKS / "on_user_prompt.py",
+                {"session_id": "s1", "cwd": cwd},
+            )
+            self.assertEqual(rc, 0)
+            self.assertIn("BRAINSTORM MODE ACTIVE", out)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
