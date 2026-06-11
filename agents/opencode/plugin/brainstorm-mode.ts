@@ -44,10 +44,17 @@ export const BrainstormMode = async ({ directory }: { directory?: string } = {})
   const cwd = directory || process.cwd()
 
   return {
-    // Soft layer: re-inject the constraint on every user message.
+    // Soft layer: re-inject the constraint on every user message. We mutate the
+    // existing text part's text (rather than pushing a new Part) — a synthetic
+    // part missing OpenCode's required fields corrupts the provider request.
+    // Running the adapter also claims a pending lock for this session id.
     "chat.message": async (input: any, output: any) => {
       const reminder = runPy("on_user_prompt.py", { session_id: input?.sessionID, cwd })
-      if (reminder) output.parts.push({ type: "text", text: reminder })
+      if (!reminder) return
+      const part = Array.isArray(output?.parts)
+        ? output.parts.find((p: any) => p?.type === "text" && typeof p.text === "string")
+        : undefined
+      if (part) part.text = `${reminder}\n\n${part.text}`
     },
 
     // Hard layer: deny edits deterministically, regardless of what the model decided.

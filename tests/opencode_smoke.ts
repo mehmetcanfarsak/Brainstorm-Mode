@@ -49,12 +49,17 @@ try {
   const act = py("activate.py", ["caching strategy"])
   check("activate.py exits 0", act.status === 0)
 
-  // 2) chat.message injects the reminder.
-  const out1: any = { parts: [] }
+  // 2) chat.message injects the reminder by MUTATING the existing text part.
+  //    (Pushing a new bare part corrupts OpenCode's provider request — verified
+  //    against the live gateway — so we must not add parts, only edit text.)
+  const userPart: any = { type: "text", text: "let's brainstorm", id: "prt_x" }
+  const out1: any = { parts: [userPart] }
   await hooks["chat.message"]({ sessionID: SESSION }, out1)
+  check("chat.message does not add parts", out1.parts.length === 1)
   check(
-    "chat.message injects reminder",
-    out1.parts.length === 1 && out1.parts[0].text.includes("BRAINSTORM MODE ACTIVE"),
+    "chat.message prepends reminder into existing text part",
+    out1.parts[0].text.includes("BRAINSTORM MODE ACTIVE") &&
+      out1.parts[0].text.includes("let's brainstorm"),
   )
 
   // 3) tool.execute.before blocks `edit`.
