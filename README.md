@@ -14,6 +14,7 @@ A Claude Code plugin (with a multi-agent architecture for Codex, OpenCode, and o
 ## Table of contents
 
 - [How it works](#how-it-works)
+- [Why a plugin beats a brainstorming skill](#why-a-plugin-beats-a-brainstorming-skill)
 - [Requirements](#requirements)
 - [Installation](#installation-claude-code)
 - [Usage](#usage)
@@ -50,6 +51,40 @@ A `PreToolUse` hook fires before `Edit`, `MultiEdit`, and `NotebookEdit` tool ca
 ### State storage
 
 A lock file at `<project>/.claude/brainstorm/locks/<session_id>.json` ties both layers together. The file persists across context compaction (same session ID) and is cleaned up automatically after 8 hours (TTL) or by `/brainstorm-done`.
+
+---
+
+## Why a plugin beats a brainstorming skill
+
+Most "brainstorming mode" tools — including the popular **[Superpowers](https://github.com/obra/superpowers) `brainstorming` skill** — are **just a skill**: a Markdown file of instructions injected into the model's context that *asks* it to stay in ideation mode. That is the same prompt-level approach the constraint is supposed to fix. A skill is advice; brainstorm-mode is a **control plane**.
+
+The difference is architectural, not cosmetic:
+
+| | A brainstorming *skill* (e.g. Superpowers) | **brainstorm-mode** (this plugin) |
+|---|---|---|
+| **Enforcement layer** | Prompt / advisory text in context | `PreToolUse` **hook** — runs in the harness, outside the model |
+| **Can the model ignore it?** | Yes — it's a suggestion the model may override | **No** — `Edit`/`MultiEdit`/`NotebookEdit` calls are *denied* before they run |
+| **"Just make one quick edit"?** | Usually complies and drifts into building | **Blocked deterministically**, every time |
+| **Survives context compaction?** | No — guidance decays and is wiped on compact | **Yes** — re-injected from disk on every turn + `SessionStart` re-anchor |
+| **Where does the state live?** | In the conversation context (volatile) | On-disk lock keyed to `session_id` (durable) |
+| **Survives `--resume`?** | Lost silently | Detected — you're told the prior topic and how to re-enter |
+| **Measures whether it worked?** | No | **Yes** — every drift attempt is logged to `drift-log.jsonl` |
+| **Talked out of the mode?** | One persuasive prompt is enough | The model **cannot disable its own hook** |
+| **Setup** | Drop in a Markdown file | `/plugin install`, or one idempotent script |
+
+### Why "just a skill" isn't enough
+
+Execution drift is a *post-training prior*, not a misunderstanding. Coding agents are tuned to act, so a one-time "no code, just ideas" instruction loses tug-of-war against that prior as the session grows — and **context compaction deletes the instruction entirely**. A skill lives in exactly the layer that decays. You can write the most eloquent brainstorming skill in the world and the model will still, three compactions later, cheerfully start editing files.
+
+brainstorm-mode moves the constraint to the layer the model **doesn't control**:
+
+- **Hard layer (hooks):** the harness denies edit tools regardless of what the model "decided." Persuasion, jailbreak-style prompts, and honest mistakes all hit the same wall.
+- **Soft layer (re-injection):** the reminder is rebuilt from the on-disk lock *every prompt*, so it's immune to compaction by construction — not by hoping the summary preserves it.
+- **Instrumentation:** because every denied attempt is recorded, you can actually *measure* drift rate over a session instead of trusting that the guidance "probably held."
+
+A skill is a great way to **describe** good brainstorming behavior. A plugin is the only way to **guarantee** it. brainstorm-mode is also multi-agent by design — the enforcement logic lives in an agent-agnostic `core/`, so the same guarantee extends to Codex, OpenCode, and others, not just one tool's skill format.
+
+> **TL;DR** — A skill politely requests ideation mode and is forgotten the moment context is compacted. brainstorm-mode enforces it at the infrastructure level, survives compaction by construction, can't be talked out of, and logs every attempt to break it.
 
 ---
 
