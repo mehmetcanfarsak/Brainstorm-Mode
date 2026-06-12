@@ -73,7 +73,7 @@ CMD_DST="$OC_DIR/commands"
 if $UNINSTALL; then
   echo "Removing brainstorm-mode from $OC_DIR ..."
   rm -f "$PLUGIN_DST/brainstorm-mode.ts"
-  rm -f "$CMD_DST/brainstorm.md" "$CMD_DST/brainstorm-actionable.md" "$CMD_DST/brainstorm-done.md"
+  rm -f "$CMD_DST/brainstorm.md" "$CMD_DST/brainstorm-actionable.md" "$CMD_DST/brainstorm-academic.md" "$CMD_DST/brainstorm-done.md"
   echo "Done. brainstorm-mode has been removed."
   exit 0
 fi
@@ -85,13 +85,13 @@ echo "Installing plugin to $PLUGIN_DST ..."
 sed "s|__BRAINSTORM_SCRIPTS_DIR__|$SCRIPTS_DIR|g" "$PLUGIN_SRC" > "$PLUGIN_DST/brainstorm-mode.ts"
 
 echo "Installing commands to $CMD_DST ..."
-for f in brainstorm.md brainstorm-actionable.md brainstorm-done.md; do
+for f in brainstorm.md brainstorm-actionable.md brainstorm-academic.md brainstorm-done.md; do
   sed "s|__BRAINSTORM_ROOT__|$PLUGIN_ROOT|g" "$CMD_SRC/$f" > "$CMD_DST/$f"
 done
 
 echo ""
 echo "brainstorm-mode installed successfully."
 echo "  Plugin   : $PLUGIN_DST/brainstorm-mode.ts"
-echo "  Commands : $CMD_DST/brainstorm.md, brainstorm-actionable.md, brainstorm-done.md"
+echo "  Commands : $CMD_DST/brainstorm.md, brainstorm-actionable.md, brainstorm-academic.md, brainstorm-done.md"
 echo ""
 echo "Requires python3 on PATH. Open a new OpenCode session to use /brainstorm."

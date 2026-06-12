@@ -1,7 +1,7 @@
 {
   "name": "brainstorm-mode",
   "version": "1.0.0",
-  "description": "Enforce brainstorm/ideation mode in Claude Code — block file-editing tools (Edit, MultiEdit, NotebookEdit) at the hook layer and re-inject the constraint on every prompt so it survives context compaction.",
+  "description": "Enforce brainstorm/ideation mode in Claude Code \u2014 block file-editing tools (Edit, MultiEdit, NotebookEdit) at the hook layer and re-inject the constraint on every prompt so it survives context compaction.",
   "keywords": [
     "brainstorm",
     "ideation",
@@ -12,7 +12,9 @@
     "pretooluse",
     "context-compaction",
     "execution-drift",
-    "productivity"
+    "productivity",
+    "academic-research",
+    "literature-review"
   ],
   "author": {
     "name": "Mehmet Can Farsak",

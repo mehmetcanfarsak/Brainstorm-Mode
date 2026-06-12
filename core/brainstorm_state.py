@@ -33,9 +33,26 @@ ACTIONABLE_REMINDER_TEMPLATE = (
     'blocked; Bash and Write are allowed. Exit with /brainstorm-done.'
 )
 
+ACADEMIC_REMINDER_TEMPLATE = (
+    'BRAINSTORM MODE ACTIVE (academic) — topic: "{topic}". This is a literature-grounded '
+    'research brainstorm. Ground every thread in the published literature: search for relevant '
+    'work BEFORE weighing in — unprompted, every time, even just to answer a question — and '
+    'shape the discussion around what is actually published. Anchor each idea to specific '
+    'papers (authors, venue, year); separate established findings from open gaps and say which '
+    'is which. SOURCE QUALITY POLICY (non-negotiable): cite only peer-reviewed work from '
+    'reputable venues as primary references{venues_clause}. Preprints on arXiv are acceptable '
+    'ONLY if they have been accepted to such a venue or are clearly from a credible group and '
+    'directly relevant. Do NOT cite workshop papers, non-peer-reviewed preprints, or low-tier '
+    'journals as primary references — vet every source against this policy before citing it. '
+    'Brainstorm as a conversation: a thought or two, then a question back. No code, no file '
+    'edits: editing tools (Edit, MultiEdit, NotebookEdit) are blocked; Bash and Write are '
+    'allowed (use Write to save reading lists). Exit with /brainstorm-done.'
+)
+
 # Brainstorm flavors. "divergent" is classic /brainstorm; "actionable" is
-# /brainstorm-actionable (feasibility-filtered, next-step-oriented ideation).
-MODES = ("divergent", "actionable")
+# /brainstorm-actionable (feasibility-filtered, next-step-oriented ideation);
+# "academic" is /brainstorm-academic (literature-grounded, venue-vetted).
+MODES = ("divergent", "actionable", "academic")
 DEFAULT_MODE = "divergent"
 
 # After this many blocked edit attempts in a session, the per-prompt reminder is
@@ -108,8 +125,12 @@ def _atomic_write(path, data):
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def write_lock(cwd, session_id, topic, mode=DEFAULT_MODE):
-    """Write a session lock atomically. Returns the lock dict."""
+def write_lock(cwd, session_id, topic, mode=DEFAULT_MODE, venues=None):
+    """Write a session lock atomically. Returns the lock dict.
+
+    `venues` (academic mode) is a free-text allowed-venue list that the
+    per-prompt reminder re-injects every turn, so it cannot decay or be skipped.
+    """
     _ensure_dirs(cwd)
     data = {
         "session_id": session_id,
@@ -118,6 +139,8 @@ def write_lock(cwd, session_id, topic, mode=DEFAULT_MODE):
         "created_at": _now_utc().isoformat(),
         "ttl_hours": TTL_HOURS,
     }
+    if venues:
+        data["venues"] = venues
     _atomic_write(_lock_path(cwd, session_id), data)
     return data
 
@@ -161,7 +184,7 @@ def delete_lock(cwd, session_id):
             pass
 
 
-def write_pending_lock(cwd, topic, mode=DEFAULT_MODE):
+def write_pending_lock(cwd, topic, mode=DEFAULT_MODE, venues=None):
     """Write a pending lock when session_id is not yet available."""
     _ensure_dirs(cwd)
     data = {
@@ -171,11 +194,13 @@ def write_pending_lock(cwd, topic, mode=DEFAULT_MODE):
         "created_at": _now_utc().isoformat(),
         "ttl_hours": TTL_HOURS,
     }
+    if venues:
+        data["venues"] = venues
     _atomic_write(_pending_path(cwd), data)
 
 
 def claim_pending_lock(cwd, session_id):
-    """Promote a pending lock to a real session lock (mode preserved).
+    """Promote a pending lock to a real session lock (mode and venues preserved).
 
     Returns the topic string if a pending lock was found, else None.
     """
@@ -186,7 +211,8 @@ def claim_pending_lock(cwd, session_id):
         with open(path) as f:
             data = json.load(f)
         topic = data.get("topic", "")
-        write_lock(cwd, session_id, topic, data.get("mode", DEFAULT_MODE))
+        write_lock(cwd, session_id, topic,
+                   data.get("mode", DEFAULT_MODE), data.get("venues"))
         os.remove(path)
         return topic
     except (json.JSONDecodeError, KeyError, OSError):
@@ -249,11 +275,16 @@ def append_drift_log(cwd, session_id, topic, tool_name, created_at_iso, post_com
         pass
 
 
-def get_reminder(topic, drift_count=0, mode=DEFAULT_MODE):
+def get_reminder(topic, drift_count=0, mode=DEFAULT_MODE, venues=None):
     """The per-prompt reminder for the given brainstorm mode. Escalates once a
     session has accumulated ESCALATION_THRESHOLD or more blocked edit attempts."""
-    template = ACTIONABLE_REMINDER_TEMPLATE if mode == "actionable" else REMINDER_TEMPLATE
-    reminder = template.format(topic=topic)
+    if mode == "academic":
+        clause = f" (allowed venues: {venues})" if venues else ""
+        reminder = ACADEMIC_REMINDER_TEMPLATE.format(topic=topic, venues_clause=clause)
+    elif mode == "actionable":
+        reminder = ACTIONABLE_REMINDER_TEMPLATE.format(topic=topic)
+    else:
+        reminder = REMINDER_TEMPLATE.format(topic=topic)
     if drift_count >= ESCALATION_THRESHOLD:
         return ESCALATION_TEMPLATE.format(n=drift_count) + reminder
     return reminder
@@ -345,6 +376,10 @@ def archive_session(cwd, session_id, handoff_text=""):
             f"# Brainstorm session: {topic}",
             "",
             f"- **Mode:** {lock.get('mode', DEFAULT_MODE)}",
+        ]
+        if lock.get("venues"):
+            lines.append(f"- **Allowed venues:** {lock['venues']}")
+        lines += [
             f"- **Started:** {created}",
             f"- **Ended:** {now.isoformat()}",
             f"- **Duration:** {duration_min} min",

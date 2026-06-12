@@ -157,7 +157,7 @@ Update the project-level `README.md` to list your agent in the "Adding support f
 ## Pull request process
 
 1. Fork the repo and create your branch from `main`
-2. Run `make test` — all 150 tests must pass
+2. Run `make test` — all 162 tests must pass
 3. Run `make coverage` — coverage must remain at 100%
 4. Open a pull request using the [PR template](.github/PULL_REQUEST_TEMPLATE.md)
 5. Describe what agent you integrated and what you had to verify about its hook system

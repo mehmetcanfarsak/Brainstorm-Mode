@@ -56,6 +56,7 @@ def main():
                 lock["topic"],
                 count_session_drift(cwd, session_id),
                 lock.get("mode", "divergent"),
+                lock.get("venues"),
             ))
         else:
             # No active lock — if one just hit its TTL, say so loudly.

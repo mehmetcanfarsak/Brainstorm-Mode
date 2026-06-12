@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`/brainstorm-academic` command** (Claude Code + OpenCode) — literature-grounded
+  research brainstorming with an enforced source-quality policy, built from
+  researcher feedback. The command scopes acceptable venues up front (proposes a
+  field-appropriate list to confirm/edit), stores them in the session lock
+  (`"mode": "academic"`, `"venues": ...`), and the per-prompt reminder re-injects
+  the full policy every turn so it cannot decay or be skipped: literature search
+  before weighing in (unprompted), papers cited with authors/venue/year,
+  established findings separated from open gaps, primary references restricted
+  to the agreed venues, arXiv preprints only if venue-accepted or clearly from a
+  credible group and directly relevant, and never workshop papers,
+  non-peer-reviewed preprints, or low-tier journals as primary references.
+  `/brainstorm-done` adds open research questions and a vetted reading list to
+  the handoff; the archive records the venue list.
+- `core/activate.py` accepts `--venues "<list>"`; pending locks preserve venues
+  across the claim.
+
 - **`/brainstorm-actionable` command** (Claude Code + OpenCode) — brainstorming for
   actionable ideas. Same enforcement as `/brainstorm` (editing blocked, per-turn
   re-injection), but the session lock carries `"mode": "actionable"` and the

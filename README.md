@@ -189,6 +189,23 @@ Same enforcement (editing stays blocked, reminder re-injected every turn), diffe
 
 The session lock stores `"mode": "actionable"`, so the steering survives compaction exactly like the classic mode. Both modes share the same lock, drift log, escalation, TTL, and archive machinery.
 
+### Academic research brainstorming
+
+```
+/brainstorm-academic robustness of diffusion models
+```
+
+A literature-grounded research brainstorm with an **enforced source-quality policy** — built for researchers who are tired of agents that (a) only consult the literature when explicitly told, (b) cite whatever a web search surfaces, and (c) forget the citation rules they were given three prompts ago.
+
+At session start the agent proposes a venue list for your field (e.g. NeurIPS, ICML, ICLR, JMLR for ML) and asks you to confirm, broaden, or replace it — then bakes it into the session lock. From that point, **every prompt** re-injects:
+
+- **Literature first, unprompted** — search published work before weighing in on any thread, even just to answer a question, and shape the discussion around what's actually published (specific papers: authors, venue, year — established findings vs. open gaps)
+- **The venue restriction** — primary references only from the agreed venues
+- **The preprint rule** — arXiv preprints are acceptable *only* if accepted at one of those venues or clearly from a credible group and directly relevant
+- **The hard exclusions** — no workshop papers, no non-peer-reviewed preprints, no low-tier journals as primary references
+
+This is the part a prompt or skill cannot deliver: instructions like these normally decay as the session grows and vanish at compaction — which is precisely when low-quality citations creep back in. Here the policy lives in the on-disk lock and re-arrives with every turn, so **it cannot be skipped, forgotten, or compacted away**. `/brainstorm-done` closes with open research questions and a vetted reading list, archived to disk.
+
 ### Ending a brainstorm session
 
 ```
@@ -281,6 +298,7 @@ Brainstorm-Mode/
 │   │   ├── commands/
 │   │   │   ├── brainstorm.md          # /brainstorm slash command definition
 │   │   │   ├── brainstorm-actionable.md  # /brainstorm-actionable (actionable mode)
+│   │   │   ├── brainstorm-academic.md # /brainstorm-academic (literature-grounded)
 │   │   │   └── brainstorm-done.md     # /brainstorm-done slash command definition
 │   │   ├── hooks/
 │   │   │   └── hooks.json             # Hook registrations for the plugin manifest
@@ -300,7 +318,7 @@ Brainstorm-Mode/
 │
 ├── tests/
 │   ├── fixtures/                      # Example hook-input JSON for manual testing
-│   └── run_tests.py                   # 150 tests, 100% line coverage, stdlib only
+│   └── run_tests.py                   # 162 tests, 100% line coverage, stdlib only
 │
 ├── .claude-plugin/
 │   ├── plugin.json                    # Claude Code plugin manifest
@@ -396,7 +414,7 @@ Key things to verify for each new agent: hook event names, tool name strings, th
 ## Testing
 
 ```bash
-make test       # run all 150 tests (no extra dependencies)
+make test       # run all 162 tests (no extra dependencies)
 make coverage   # run tests and print line coverage (100%)
 make clean      # remove __pycache__ and coverage artifacts
 ```

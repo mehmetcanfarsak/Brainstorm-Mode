@@ -248,6 +248,14 @@ class TestUserPrompt(unittest.TestCase):
             self.assertIn("(actionable)", out)
             self.assertIn("ship it", out)
 
+    def test_academic_lock_shows_venue_policy(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "diffusion models", "academic", "NeurIPS, ICML")
+            out = self._run(cwd, "s1")
+            self.assertIn("(academic)", out)
+            self.assertIn("allowed venues: NeurIPS, ICML", out)
+            self.assertIn("workshop papers", out)
+
     def test_pending_lock_claimed_and_reminder_shown(self):
         with tempfile.TemporaryDirectory() as cwd:
             bs.write_pending_lock(cwd, "pending topic")
@@ -428,6 +436,44 @@ class TestActivate(unittest.TestCase):
             data = json.loads((_locks_dir(cwd) / "_pending.json").read_text())
             self.assertEqual(data["mode"], "actionable")
 
+    # ── academic mode + --venues ──────────────────────────────────────────────
+
+    def test_academic_mode_with_venues(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            out, rc = self._run(cwd, "s1",
+                                ["--mode", "academic", "--venues", "NeurIPS, ICML", "my topic"])
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "s1.json").read_text())
+            self.assertEqual(data["mode"], "academic")
+            self.assertEqual(data["venues"], "NeurIPS, ICML")
+            self.assertIn("NeurIPS, ICML", out)
+
+    def test_academic_mode_without_venues(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _, rc = self._run(cwd, "s1", ["--mode", "academic", "my topic"])
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "s1.json").read_text())
+            self.assertEqual(data["mode"], "academic")
+            self.assertNotIn("venues", data)
+
+    def test_venues_flag_missing_value_errors(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py", "--mode", "academic", "--venues"])
+        self.assertEqual(rc, 1)
+
+    def test_pending_lock_carries_venues(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            buf = io.StringIO()
+            env = {"BRAINSTORM_CWD": str(cwd)}
+            with redirect_stdout(buf):
+                rc = activate_mod.main(
+                    argv=["activate.py", "--mode", "academic",
+                          "--venues", "TPAMI", "pending topic"], env=env)
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "_pending.json").read_text())
+            self.assertEqual(data["venues"], "TPAMI")
+
 
 # ── Tests: deactivate.py ──────────────────────────────────────────────────────
 
@@ -538,6 +584,12 @@ class TestBrainstormState(unittest.TestCase):
             bs.write_pending_lock(cwd, "topic", "actionable")
             bs.claim_pending_lock(cwd, "s1")
             self.assertEqual(bs.read_lock(cwd, "s1")["mode"], "actionable")
+
+    def test_claim_pending_preserves_venues(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_pending_lock(cwd, "topic", "academic", "NeurIPS")
+            bs.claim_pending_lock(cwd, "s1")
+            self.assertEqual(bs.read_lock(cwd, "s1")["venues"], "NeurIPS")
 
     def test_write_lock_invalid_mode_falls_back(self):
         with tempfile.TemporaryDirectory() as cwd:
@@ -892,6 +944,13 @@ class TestOpenCodeUserPrompt(unittest.TestCase):
             bs.write_lock(cwd, "s1", "ship it", "actionable")
             self.assertIn("(actionable)", self._run(cwd, "s1"))
 
+    def test_academic_lock_shows_venue_policy(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "academic", "TPAMI")
+            out = self._run(cwd, "s1")
+            self.assertIn("(academic)", out)
+            self.assertIn("allowed venues: TPAMI", out)
+
     def test_pending_lock_claimed_and_reminder_shown(self):
         with tempfile.TemporaryDirectory() as cwd:
             bs.write_pending_lock(cwd, "pending topic")
@@ -1017,6 +1076,25 @@ class TestReminderEscalation(unittest.TestCase):
 
     def test_unknown_mode_falls_back_to_divergent_reminder(self):
         self.assertEqual(bs.get_reminder("topic", mode="bogus"), bs.get_reminder("topic"))
+
+    def test_academic_reminder_contains_quality_policy(self):
+        out = bs.get_reminder("topic", mode="academic")
+        self.assertIn("(academic)", out)
+        self.assertIn("peer-reviewed", out)
+        self.assertIn("arXiv", out)
+        self.assertIn("workshop papers", out)
+
+    def test_academic_reminder_includes_venues_when_set(self):
+        out = bs.get_reminder("topic", mode="academic", venues="NeurIPS, ICML, ICLR")
+        self.assertIn("allowed venues: NeurIPS, ICML, ICLR", out)
+
+    def test_academic_reminder_omits_venue_clause_when_unset(self):
+        self.assertNotIn("allowed venues", bs.get_reminder("topic", mode="academic"))
+
+    def test_academic_reminder_escalates_too(self):
+        out = bs.get_reminder("topic", bs.ESCALATION_THRESHOLD, "academic")
+        self.assertIn("ATTENTION", out)
+        self.assertIn("(academic)", out)
 
     def test_count_session_drift_no_log(self):
         with tempfile.TemporaryDirectory() as cwd:
@@ -1161,6 +1239,14 @@ class TestSessionArchive(unittest.TestCase):
             bs.write_lock(cwd, "s1", "topic", "actionable")
             path = bs.archive_session(cwd, "s1", "plan")
             self.assertIn("**Mode:** actionable", Path(path).read_text())
+
+    def test_archive_records_venues(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "academic", "NeurIPS, ICML")
+            path = bs.archive_session(cwd, "s1", "handoff")
+            text = Path(path).read_text()
+            self.assertIn("**Mode:** academic", text)
+            self.assertIn("**Allowed venues:** NeurIPS, ICML", text)
 
     def test_archive_no_lock_returns_none(self):
         with tempfile.TemporaryDirectory() as cwd:

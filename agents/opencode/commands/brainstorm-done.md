@@ -31,6 +31,12 @@ Choose one of:
 > each with its smallest first step, main blocker, and effort guess. The
 > recommended next step is then simply "start with action `<N>`".
 
+> **Academic sessions** (started with `/brainstorm-academic`): add two sections
+> to the handoff — **Open research questions** (the gaps the discussion
+> surfaced) and a **vetted reading list** (each entry: paper, authors, venue,
+> year, one line on why it matters; only sources that pass the session's
+> quality policy).
+
 ## Step 2 — Deactivate the lock (and archive the handoff)
 
 Only after the summary is fully written, run this with the `bash` tool, **piping
