@@ -173,6 +173,22 @@ If no topic is given, Claude asks for one before activating. Once active:
 - `Edit`, `MultiEdit`, and `NotebookEdit` are blocked at the hook layer
 - `Bash` and `Write` remain available for exploration and saving notes
 
+### Brainstorming for actionable ideas
+
+```
+/brainstorm-actions how do I grow this project's user base?
+```
+
+Same enforcement (editing stays blocked, reminder re-injected every turn), different goal: instead of pure divergence, every idea must survive a **feasibility filter** and end with a clear path to action. In this mode the agent:
+
+- Establishes your **constraints first** — time, resources, skills, what "done" looks like
+- Names, for each idea, the **smallest first step** (startable this week), the **main blocker**, and a rough **effort guess**
+- **Shrinks rather than drops**: an infeasible idea becomes its "10% version" instead of dying
+- Surfaces **dependencies** — which idea unblocks the others
+- Ends (via `/brainstorm-done`) with an **action plan**: an ordered list of first steps rather than idea clusters
+
+The session lock stores `"mode": "actionable"`, so the steering survives compaction exactly like the classic mode. Both modes share the same lock, drift log, escalation, TTL, and archive machinery.
+
 ### Ending a brainstorm session
 
 ```
@@ -264,6 +280,7 @@ Brainstorm-Mode/
 │   ├── claude-code/                   # Claude Code integration (v1)
 │   │   ├── commands/
 │   │   │   ├── brainstorm.md          # /brainstorm slash command definition
+│   │   │   ├── brainstorm-actions.md  # /brainstorm-actions (actionable mode)
 │   │   │   └── brainstorm-done.md     # /brainstorm-done slash command definition
 │   │   ├── hooks/
 │   │   │   └── hooks.json             # Hook registrations for the plugin manifest
@@ -283,7 +300,7 @@ Brainstorm-Mode/
 │
 ├── tests/
 │   ├── fixtures/                      # Example hook-input JSON for manual testing
-│   └── run_tests.py                   # 135 tests, 100% line coverage, stdlib only
+│   └── run_tests.py                   # 150 tests, 100% line coverage, stdlib only
 │
 ├── .claude-plugin/
 │   ├── plugin.json                    # Claude Code plugin manifest
@@ -341,6 +358,7 @@ Lock files live at `<project>/.claude/brainstorm/locks/<session_id>.json` and ar
 {
   "session_id": "abc-123",
   "topic": "caching strategy",
+  "mode": "divergent",
   "created_at": "2026-01-15T14:17:52.441+00:00",
   "ttl_hours": 8
 }
@@ -378,7 +396,7 @@ Key things to verify for each new agent: hook event names, tool name strings, th
 ## Testing
 
 ```bash
-make test       # run all 135 tests (no extra dependencies)
+make test       # run all 150 tests (no extra dependencies)
 make coverage   # run tests and print line coverage (100%)
 make clean      # remove __pycache__ and coverage artifacts
 ```

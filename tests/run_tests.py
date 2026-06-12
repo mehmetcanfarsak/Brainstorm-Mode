@@ -241,6 +241,13 @@ class TestUserPrompt(unittest.TestCase):
             self.assertIn("ATTENTION", out)
             self.assertIn("BRAINSTORM MODE ACTIVE", out)
 
+    def test_actionable_lock_shows_actionable_reminder(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "ship it", "actionable")
+            out = self._run(cwd, "s1")
+            self.assertIn("(actionable)", out)
+            self.assertIn("ship it", out)
+
     def test_pending_lock_claimed_and_reminder_shown(self):
         with tempfile.TemporaryDirectory() as cwd:
             bs.write_pending_lock(cwd, "pending topic")
@@ -374,6 +381,53 @@ class TestActivate(unittest.TestCase):
             rc = activate_mod.main(argv=["activate.py"])
         self.assertEqual(rc, 1)
 
+    # ── --mode flag (actionable brainstorming) ────────────────────────────────
+
+    def test_mode_actionable_creates_lock_with_mode(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            out, rc = self._run(cwd, "s1", ["--mode", "actionable", "my topic"])
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "s1.json").read_text())
+            self.assertEqual(data["mode"], "actionable")
+            self.assertEqual(data["topic"], "my topic")
+            self.assertIn("actionable", out.lower())
+
+    def test_default_mode_is_divergent(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            _, rc = self._run(cwd, "s1", ["my topic"])
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "s1.json").read_text())
+            self.assertEqual(data["mode"], "divergent")
+
+    def test_mode_flag_missing_value_errors(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py", "--mode"])
+        self.assertEqual(rc, 1)
+
+    def test_mode_flag_invalid_value_errors(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py", "--mode", "bogus", "topic"])
+        self.assertEqual(rc, 1)
+
+    def test_mode_flag_without_topic_errors(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py", "--mode", "actionable"])
+        self.assertEqual(rc, 1)
+
+    def test_pending_lock_carries_mode(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            buf = io.StringIO()
+            env = {"BRAINSTORM_CWD": str(cwd)}
+            with redirect_stdout(buf):
+                rc = activate_mod.main(
+                    argv=["activate.py", "--mode", "actionable", "pending topic"], env=env)
+            self.assertEqual(rc, 0)
+            data = json.loads((_locks_dir(cwd) / "_pending.json").read_text())
+            self.assertEqual(data["mode"], "actionable")
+
 
 # ── Tests: deactivate.py ──────────────────────────────────────────────────────
 
@@ -478,6 +532,23 @@ class TestBrainstormState(unittest.TestCase):
     def test_claim_pending_no_pending_returns_none(self):
         with tempfile.TemporaryDirectory() as cwd:
             self.assertIsNone(bs.claim_pending_lock(cwd, "s1"))
+
+    def test_claim_pending_preserves_mode(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_pending_lock(cwd, "topic", "actionable")
+            bs.claim_pending_lock(cwd, "s1")
+            self.assertEqual(bs.read_lock(cwd, "s1")["mode"], "actionable")
+
+    def test_write_lock_invalid_mode_falls_back(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "bogus")
+            self.assertEqual(bs.read_lock(cwd, "s1")["mode"], "divergent")
+
+    def test_write_pending_lock_invalid_mode_falls_back(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_pending_lock(cwd, "topic", "bogus")
+            data = json.loads((_locks_dir(cwd) / "_pending.json").read_text())
+            self.assertEqual(data["mode"], "divergent")
 
     def test_claim_corrupt_pending_returns_none(self):
         with tempfile.TemporaryDirectory() as cwd:
@@ -816,6 +887,11 @@ class TestOpenCodeUserPrompt(unittest.TestCase):
                 bs.append_drift_log(cwd, "s1", "topic", "edit", lock["created_at"], False)
             self.assertIn("ATTENTION", self._run(cwd, "s1"))
 
+    def test_actionable_lock_shows_actionable_reminder(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "ship it", "actionable")
+            self.assertIn("(actionable)", self._run(cwd, "s1"))
+
     def test_pending_lock_claimed_and_reminder_shown(self):
         with tempfile.TemporaryDirectory() as cwd:
             bs.write_pending_lock(cwd, "pending topic")
@@ -927,6 +1003,20 @@ class TestReminderEscalation(unittest.TestCase):
         self.assertIn("ATTENTION", out)
         self.assertIn(str(bs.ESCALATION_THRESHOLD), out)
         self.assertIn("BRAINSTORM MODE ACTIVE", out)  # full reminder still present
+
+    def test_actionable_reminder_differs_from_divergent(self):
+        out = bs.get_reminder("topic", mode="actionable")
+        self.assertIn("(actionable)", out)
+        self.assertIn("first", out.lower())  # smallest-first-step guidance
+        self.assertNotEqual(out, bs.get_reminder("topic"))
+
+    def test_actionable_reminder_escalates_too(self):
+        out = bs.get_reminder("topic", bs.ESCALATION_THRESHOLD, "actionable")
+        self.assertIn("ATTENTION", out)
+        self.assertIn("(actionable)", out)
+
+    def test_unknown_mode_falls_back_to_divergent_reminder(self):
+        self.assertEqual(bs.get_reminder("topic", mode="bogus"), bs.get_reminder("topic"))
 
     def test_count_session_drift_no_log(self):
         with tempfile.TemporaryDirectory() as cwd:
@@ -1065,6 +1155,12 @@ class TestSessionArchive(unittest.TestCase):
             text = Path(path).read_text()
             self.assertIn("Blocked edit attempts:** 0", text)
             self.assertIn("no blocked edit attempts", text.lower())
+
+    def test_archive_records_mode(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "actionable")
+            path = bs.archive_session(cwd, "s1", "plan")
+            self.assertIn("**Mode:** actionable", Path(path).read_text())
 
     def test_archive_no_lock_returns_none(self):
         with tempfile.TemporaryDirectory() as cwd:

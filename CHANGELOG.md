@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`/brainstorm-actions` command** (Claude Code + OpenCode) — brainstorming for
+  actionable ideas. Same enforcement as `/brainstorm` (editing blocked, per-turn
+  re-injection), but the session lock carries `"mode": "actionable"` and the
+  reminder steers toward concrete, feasibility-filtered ideas: constraints
+  first, smallest first step + main blocker + effort guess per idea, shrink
+  before dropping. `/brainstorm-done` produces an ordered action plan for these
+  sessions, and the archive records the mode.
+- `core/activate.py` accepts `--mode divergent|actionable`; pending locks
+  preserve the mode across the claim. Old locks without a mode field are read
+  as divergent (backward compatible).
+
 - **OpenCode integration** (`agents/opencode/`) — a thin TypeScript plugin that
   reuses the same agent-agnostic `core/`:
   - `tool.execute.before` throws to hard-block the `edit` and `patch` tools.

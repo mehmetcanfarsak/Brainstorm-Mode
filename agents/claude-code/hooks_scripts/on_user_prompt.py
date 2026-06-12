@@ -47,7 +47,11 @@ def main():
                 lock = read_lock(cwd, session_id)
 
         if lock:
-            print(get_reminder(lock["topic"], count_session_drift(cwd, session_id)))
+            print(get_reminder(
+                lock["topic"],
+                count_session_drift(cwd, session_id),
+                lock.get("mode", "divergent"),
+            ))
         else:
             # No active lock — if one just hit its TTL, say so loudly (editing
             # silently unblocking mid-session is a trap otherwise).

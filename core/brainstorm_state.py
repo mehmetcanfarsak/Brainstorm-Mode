@@ -22,6 +22,22 @@ REMINDER_TEMPLATE = (
     'Exit with /brainstorm-done.'
 )
 
+ACTIONABLE_REMINDER_TEMPLATE = (
+    'BRAINSTORM MODE ACTIVE (actionable) — topic: "{topic}". Brainstorm as a conversation, '
+    'not a report — a thought or two, then a question back — but aim every idea at action: '
+    'each one should be concrete, scoped, and feasible, with a smallest-first-step and its '
+    'main blocker named. Filter for feasibility; prefer ideas the user could start this week. '
+    'Probe constraints (time, budget, skills, dependencies) before going wide. '
+    'Use AskUserQuestion to let the user pick what to make actionable next. '
+    'Still no code and no file edits: editing tools (Edit, MultiEdit, NotebookEdit) are '
+    'blocked; Bash and Write are allowed. Exit with /brainstorm-done.'
+)
+
+# Brainstorm flavors. "divergent" is classic /brainstorm; "actionable" is
+# /brainstorm-actions (feasibility-filtered, next-step-oriented ideation).
+MODES = ("divergent", "actionable")
+DEFAULT_MODE = "divergent"
+
 # After this many blocked edit attempts in a session, the per-prompt reminder is
 # prefixed with a sterner escalation line (the model keeps trying to edit anyway).
 ESCALATION_THRESHOLD = 3
@@ -92,12 +108,13 @@ def _atomic_write(path, data):
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def write_lock(cwd, session_id, topic):
+def write_lock(cwd, session_id, topic, mode=DEFAULT_MODE):
     """Write a session lock atomically. Returns the lock dict."""
     _ensure_dirs(cwd)
     data = {
         "session_id": session_id,
         "topic": topic,
+        "mode": mode if mode in MODES else DEFAULT_MODE,
         "created_at": _now_utc().isoformat(),
         "ttl_hours": TTL_HOURS,
     }
@@ -144,12 +161,13 @@ def delete_lock(cwd, session_id):
             pass
 
 
-def write_pending_lock(cwd, topic):
+def write_pending_lock(cwd, topic, mode=DEFAULT_MODE):
     """Write a pending lock when session_id is not yet available."""
     _ensure_dirs(cwd)
     data = {
         "session_id": "_pending",
         "topic": topic,
+        "mode": mode if mode in MODES else DEFAULT_MODE,
         "created_at": _now_utc().isoformat(),
         "ttl_hours": TTL_HOURS,
     }
@@ -157,7 +175,7 @@ def write_pending_lock(cwd, topic):
 
 
 def claim_pending_lock(cwd, session_id):
-    """Promote a pending lock to a real session lock.
+    """Promote a pending lock to a real session lock (mode preserved).
 
     Returns the topic string if a pending lock was found, else None.
     """
@@ -168,7 +186,7 @@ def claim_pending_lock(cwd, session_id):
         with open(path) as f:
             data = json.load(f)
         topic = data.get("topic", "")
-        write_lock(cwd, session_id, topic)
+        write_lock(cwd, session_id, topic, data.get("mode", DEFAULT_MODE))
         os.remove(path)
         return topic
     except (json.JSONDecodeError, KeyError, OSError):
@@ -231,10 +249,11 @@ def append_drift_log(cwd, session_id, topic, tool_name, created_at_iso, post_com
         pass
 
 
-def get_reminder(topic, drift_count=0):
-    """The per-prompt reminder. Escalates once a session has accumulated
-    ESCALATION_THRESHOLD or more blocked edit attempts."""
-    reminder = REMINDER_TEMPLATE.format(topic=topic)
+def get_reminder(topic, drift_count=0, mode=DEFAULT_MODE):
+    """The per-prompt reminder for the given brainstorm mode. Escalates once a
+    session has accumulated ESCALATION_THRESHOLD or more blocked edit attempts."""
+    template = ACTIONABLE_REMINDER_TEMPLATE if mode == "actionable" else REMINDER_TEMPLATE
+    reminder = template.format(topic=topic)
     if drift_count >= ESCALATION_THRESHOLD:
         return ESCALATION_TEMPLATE.format(n=drift_count) + reminder
     return reminder
@@ -325,6 +344,7 @@ def archive_session(cwd, session_id, handoff_text=""):
         lines = [
             f"# Brainstorm session: {topic}",
             "",
+            f"- **Mode:** {lock.get('mode', DEFAULT_MODE)}",
             f"- **Started:** {created}",
             f"- **Ended:** {now.isoformat()}",
             f"- **Duration:** {duration_min} min",

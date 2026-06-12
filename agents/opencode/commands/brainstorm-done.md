@@ -26,6 +26,11 @@ Choose one of:
 - "Begin planning/implementing cluster `<X>`" — if one cluster is clearly the strongest path
 - "More divergence needed on `<Y>`" — if key questions remain unresolved
 
+> **Actionable sessions** (started with `/brainstorm-actions`): structure the
+> handoff as an **action plan** instead of clusters — an ordered list of ideas,
+> each with its smallest first step, main blocker, and effort guess. The
+> recommended next step is then simply "start with action `<N>`".
+
 ## Step 2 — Deactivate the lock (and archive the handoff)
 
 Only after the summary is fully written, run this with the `bash` tool, **piping
