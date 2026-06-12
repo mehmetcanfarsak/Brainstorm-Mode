@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`/brainstorm-actions` command** (Claude Code + OpenCode) — brainstorming for
+- **`/brainstorm-actionable` command** (Claude Code + OpenCode) — brainstorming for
   actionable ideas. Same enforcement as `/brainstorm` (editing blocked, per-turn
   re-injection), but the session lock carries `"mode": "actionable"` and the
   reminder steers toward concrete, feasibility-filtered ideas: constraints

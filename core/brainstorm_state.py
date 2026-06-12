@@ -34,7 +34,7 @@ ACTIONABLE_REMINDER_TEMPLATE = (
 )
 
 # Brainstorm flavors. "divergent" is classic /brainstorm; "actionable" is
-# /brainstorm-actions (feasibility-filtered, next-step-oriented ideation).
+# /brainstorm-actionable (feasibility-filtered, next-step-oriented ideation).
 MODES = ("divergent", "actionable")
 DEFAULT_MODE = "divergent"
 

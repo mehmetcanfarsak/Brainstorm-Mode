@@ -75,7 +75,7 @@ CMD_DST="$CLAUDE_DIR/commands"
 # ── Uninstall ─────────────────────────────────────────────────────────────────
 if $UNINSTALL; then
   echo "Removing brainstorm-mode commands ..."
-  rm -f "$CMD_DST/brainstorm.md" "$CMD_DST/brainstorm-actions.md" "$CMD_DST/brainstorm-done.md"
+  rm -f "$CMD_DST/brainstorm.md" "$CMD_DST/brainstorm-actionable.md" "$CMD_DST/brainstorm-done.md"
 
   if [[ -f "$SETTINGS" ]] && command -v jq &>/dev/null; then
     echo "Removing brainstorm-mode hooks from $SETTINGS ..."
@@ -96,7 +96,7 @@ require_jq
 mkdir -p "$CMD_DST"
 
 echo "Installing commands to $CMD_DST ..."
-for f in brainstorm.md brainstorm-actions.md brainstorm-done.md; do
+for f in brainstorm.md brainstorm-actionable.md brainstorm-done.md; do
   sed "s|\${CLAUDE_PLUGIN_ROOT}|$PLUGIN_ROOT|g" "$CMD_SRC/$f" > "$CMD_DST/$f"
 done
 
@@ -120,7 +120,7 @@ jq --arg up  "python3 $SCRIPTS_DIR/on_user_prompt.py" \
 
 echo ""
 echo "brainstorm-mode installed successfully."
-echo "  Commands : $CMD_DST/brainstorm.md, brainstorm-actions.md, brainstorm-done.md"
+echo "  Commands : $CMD_DST/brainstorm.md, brainstorm-actionable.md, brainstorm-done.md"
 echo "  Hooks    : $SETTINGS"
 echo ""
 echo "Open a new Claude Code session in $TARGET_DIR to start using /brainstorm."

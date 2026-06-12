@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Activate brainstorm mode for the current session.
-Called by the /brainstorm and /brainstorm-actions commands:
+Called by the /brainstorm and /brainstorm-actionable commands:
     python3 activate.py [--mode divergent|actionable] <topic...>
 
 Session ID is read from BRAINSTORM_SESSION_ID (agent-neutral) or, for backward

@@ -176,7 +176,7 @@ If no topic is given, Claude asks for one before activating. Once active:
 ### Brainstorming for actionable ideas
 
 ```
-/brainstorm-actions how do I grow this project's user base?
+/brainstorm-actionable how do I grow this project's user base?
 ```
 
 Same enforcement (editing stays blocked, reminder re-injected every turn), different goal: instead of pure divergence, every idea must survive a **feasibility filter** and end with a clear path to action. In this mode the agent:
@@ -280,7 +280,7 @@ Brainstorm-Mode/
 │   ├── claude-code/                   # Claude Code integration (v1)
 │   │   ├── commands/
 │   │   │   ├── brainstorm.md          # /brainstorm slash command definition
-│   │   │   ├── brainstorm-actions.md  # /brainstorm-actions (actionable mode)
+│   │   │   ├── brainstorm-actionable.md  # /brainstorm-actionable (actionable mode)
 │   │   │   └── brainstorm-done.md     # /brainstorm-done slash command definition
 │   │   ├── hooks/
 │   │   │   └── hooks.json             # Hook registrations for the plugin manifest
