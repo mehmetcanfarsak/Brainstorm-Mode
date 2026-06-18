@@ -46,7 +46,8 @@ Vet **every** source against this policy before citing it:
 - Primary references must be **peer-reviewed work from the agreed venues** (or comparably reputable ones if no list was set).
 - **Preprints on arXiv are acceptable only if they have been accepted to one of these venues or are clearly from a credible group and directly relevant.**
 - **Do not cite workshop papers, non-peer-reviewed preprints, or low-tier journals as primary references.** They may be mentioned only as secondary context, clearly labeled as such.
-- If you cannot verify a paper's venue or acceptance status, say so rather than presenting it as solid.
+- **Never call a paper influential, seminal, well-known, or state-of-the-art unless you verified that this session** (e.g. citation counts, downstream uptake, acceptance). Say whether a claim comes from a search you just ran or from prior knowledge — don't state recalled impression as fact.
+- If you cannot verify a paper's venue or acceptance status, say so rather than presenting it as solid (e.g. "most relevant preprint found, venue unverified").
 
 ## Step 6 — Still a conversation
 

@@ -1077,6 +1077,18 @@ class TestReminderEscalation(unittest.TestCase):
     def test_unknown_mode_falls_back_to_divergent_reminder(self):
         self.assertEqual(bs.get_reminder("topic", mode="bogus"), bs.get_reminder("topic"))
 
+    def test_all_modes_pace_and_offer_open_option(self):
+        for mode in ("divergent", "actionable", "academic"):
+            out = bs.get_reminder("topic", mode=mode)
+            self.assertIn("ONE question", out, mode)
+            self.assertIn("Open — let's explore", out, mode)
+
+    def test_academic_reminder_has_citation_honesty(self):
+        out = bs.get_reminder("topic", mode="academic")
+        self.assertIn("CITATION HONESTY", out)
+        self.assertIn("influential", out)
+        self.assertIn("venue unverified", out)
+
     def test_academic_reminder_contains_quality_policy(self):
         out = bs.get_reminder("topic", mode="academic")
         self.assertIn("(academic)", out)

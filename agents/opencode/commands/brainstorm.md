@@ -40,7 +40,7 @@ Brainstorming is a dialogue, not a one-shot deliverable. **Do NOT dump a complet
 Instead:
 
 - **Move in small steps.** Offer a little, then turn it back to the user. A good turn is one or two thoughts plus a question — not an exhaustive enumeration.
-- **Ask questions constantly**, including genuinely open-ended ones: "What's the part of this that feels most stuck?", "What would make this obviously worth doing?", "Who hates this idea, and why?", "What are we secretly assuming?"
+- **Ask one question at a time.** End a turn with a *single* question, not a barrage — give the user room to breathe. Favor genuinely open-ended ones: "What's the part of this that feels most stuck?", "What would make this obviously worth doing?", "Who hates this idea, and why?", "What are we secretly assuming?" When you offer concrete choices, always include an open-ended "Open — let's just explore" option.
 - **Build on their answers.** Each reply should react to what they just said, not restart from your own outline.
 - **Follow their energy.** If they get excited about one thread, chase it. If it fizzles, name that and pivot.
 

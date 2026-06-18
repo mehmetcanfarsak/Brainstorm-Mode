@@ -13,9 +13,19 @@ CLEANUP_AGE_DAYS = 7
 
 BLOCKED_TOOLS = frozenset({"Edit", "MultiEdit", "NotebookEdit"})
 
+# Shared conversational discipline, re-injected with every reminder. Targets two
+# real failure modes: rapid-fire questioning, and boxing the user into narrow choices.
+_PACING = (
+    "Pace it — ask at most ONE question per reply and let the user breathe; never stack "
+    "several questions or interrogate. Whenever you offer choices, always include an "
+    "open-ended option (e.g. \"Open — let's explore\") so the user is never boxed into "
+    "your framing. "
+)
+
 REMINDER_TEMPLATE = (
     'BRAINSTORM MODE ACTIVE — topic: "{topic}". Brainstorm as a conversation, not a report: '
     'offer a thought or two, then ask a question back — including open-ended ones. '
+    + _PACING +
     'Do not dump a full structured list of framings/ideas at once. Diverge, don\'t converge; '
     'no code, no implementation detail. Use AskUserQuestion to let the user pick a direction. '
     'Editing tools (Edit, MultiEdit, NotebookEdit) are blocked; Bash and Write are allowed. '
@@ -28,6 +38,7 @@ ACTIONABLE_REMINDER_TEMPLATE = (
     'each one should be concrete, scoped, and feasible, with a smallest-first-step and its '
     'main blocker named. Filter for feasibility; prefer ideas the user could start this week. '
     'Probe constraints (time, budget, skills, dependencies) before going wide. '
+    + _PACING +
     'Use AskUserQuestion to let the user pick what to make actionable next. '
     'Still no code and no file edits: editing tools (Edit, MultiEdit, NotebookEdit) are '
     'blocked; Bash and Write are allowed. Exit with /brainstorm-done.'
@@ -44,6 +55,11 @@ ACADEMIC_REMINDER_TEMPLATE = (
     'ONLY if they have been accepted to such a venue or are clearly from a credible group and '
     'directly relevant. Do NOT cite workshop papers, non-peer-reviewed preprints, or low-tier '
     'journals as primary references — vet every source against this policy before citing it. '
+    'CITATION HONESTY: never call a paper influential, seminal, well-known, or state-of-the-art '
+    'unless you verified that this session; say whether each claim comes from a search you just '
+    'ran or from prior knowledge, and when a source\'s venue or impact is unverified, label it '
+    '(e.g. "venue unverified") rather than presenting it as solid. '
+    + _PACING +
     'Brainstorm as a conversation: a thought or two, then a question back. No code, no file '
     'edits: editing tools (Edit, MultiEdit, NotebookEdit) are blocked; Bash and Write are '
     'allowed (use Write to save reading lists). Exit with /brainstorm-done.'

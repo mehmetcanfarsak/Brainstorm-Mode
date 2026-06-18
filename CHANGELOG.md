@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Conversational pacing** (all modes) — the per-prompt reminder now instructs the
+  agent to ask at most one question per reply (no rapid-fire interrogation) and to
+  always offer an open-ended option (e.g. "Open — let's explore") when presenting
+  choices, so the user is never boxed into the agent's framing. From user feedback.
+- **Stronger citation honesty** (academic mode) — the reminder now forbids calling a
+  paper influential/seminal/well-known/state-of-the-art unless verified that session,
+  requires distinguishing searched-now claims from recalled ones, and requires
+  labeling unverified sources (e.g. "venue unverified"). The `/brainstorm.md` and
+  `/brainstorm-academic.md` commands carry matching guidance.
+
 ### Added
 
 - **`/brainstorm-academic` command** (Claude Code + OpenCode) — literature-grounded
