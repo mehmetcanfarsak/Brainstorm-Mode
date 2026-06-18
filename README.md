@@ -17,6 +17,7 @@ A plugin for **Claude Code and OpenCode** (with a multi-agent architecture ready
 - [Why a plugin beats a brainstorming skill](#why-a-plugin-beats-a-brainstorming-skill)
 - [Requirements](#requirements)
 - [Installation](#installation-claude-code)
+  - [Desktop app & IDE extensions](#desktop-app--ide-extensions-vs-code-jetbrains)
 - [Usage](#usage)
 - [FAQ](#faq)
 - [Project structure](#project-structure)
@@ -100,7 +101,7 @@ A skill is a great way to **describe** good brainstorming behavior. A plugin is 
 
 ### Option A — Plugin marketplace (recommended)
 
-The simplest way. Inside Claude Code, add this repo as a plugin marketplace and install:
+The simplest way. In Claude Code's message box, type `/` and run:
 
 ```
 /plugin marketplace add mehmetcanfarsak/Brainstorm-Mode
@@ -110,6 +111,8 @@ The simplest way. Inside Claude Code, add this repo as a plugin marketplace and 
 That's it — the commands and hooks are registered automatically, no `jq` or shell script needed. Manage it any time with `/plugin` (enable, disable, or uninstall).
 
 > The format is `/plugin install <plugin>@<marketplace>`. Here both are named `brainstorm-mode` (this repo is both the marketplace and the plugin), which is why it appears twice.
+>
+> If your surface manages plugins through a graphical **Plugins** panel rather than the `/plugin` command, add the marketplace `mehmetcanfarsak/Brainstorm-Mode` and install `brainstorm-mode` there — it's the same plugin. See [Desktop app & IDE extensions](#desktop-app--ide-extensions-vs-code-jetbrains) below.
 
 To pin a specific version or branch:
 
@@ -154,6 +157,40 @@ The setup script:
 bash agents/claude-code/setup.sh --uninstall --project /path/to/your-project
 bash agents/claude-code/setup.sh --uninstall --global
 ```
+
+### Desktop app & IDE extensions (VS Code, JetBrains)
+
+brainstorm-mode is **plugin/hook configuration, not a separate program**, and Claude Code stores that configuration in `~/.claude/` (user scope) and `<project>/.claude/` (project scope). All Claude Code surfaces — the CLI, the **desktop app** (Mac/Windows), and the **IDE extensions** (VS Code, JetBrains) — read the same configuration. **So you install once and it works everywhere; you do not install brainstorm-mode "into" the extension or the app separately.**
+
+**Recommended: install once, use everywhere.**
+
+- **If your surface can run the `/plugin` commands** (type `/` in the message box): use [Option A](#option-a--plugin-marketplace-recommended) above.
+- **If your surface manages plugins from a graphical Plugins panel:** open it, add the marketplace `mehmetcanfarsak/Brainstorm-Mode`, then install the `brainstorm-mode` plugin.
+- **Most robust on any surface — the global script install:** it just writes Claude Code's shared user config (`~/.claude/settings.json` + `~/.claude/commands/`), which the desktop app and IDE extensions both read. Run it once in a terminal:
+
+  ```bash
+  git clone https://github.com/mehmetcanfarsak/Brainstorm-Mode
+  cd Brainstorm-Mode
+  bash agents/claude-code/setup.sh --global   # needs jq
+  ```
+
+  Then reload/restart Claude Code (next bullet). This is the surest path if a surface's plugin UI gives you trouble.
+
+**After installing, reload so the commands and hooks load:**
+
+- **VS Code / JetBrains:** reload the Claude Code panel (or reload the editor window).
+- **Desktop app:** restart Claude Code when it prompts you (or quit and reopen).
+- **CLI:** start a new session, or run `/reload-plugins` if your version supports it.
+
+Type `/brainstorm` in the message box to confirm the command is available.
+
+**Important — `python3` must be on the app's `PATH`.** The hooks shell out to `python3`. A terminal (and a CLI session, or an editor launched with `code .` from that terminal) inherits your shell `PATH`, but **apps launched from the Dock / Start menu / Finder often do *not* see your shell `PATH`**. If `/brainstorm` activates but editing tools aren't actually blocked in the desktop app or IDE, that almost always means the hook couldn't find `python3`. Fixes:
+
+- Confirm Python 3.8+ is installed and on a standard path (`python3 --version`).
+- Launch the editor/app from a terminal that has `python3` on `PATH` (e.g. `code .`), **or**
+- Add Python to the `PATH` the app sees (macOS: ensure it's exported in `~/.zprofile`/`~/.zshrc`; or use Claude Code's environment settings if your version exposes them).
+
+> Heads-up: typing `/plugin marketplace add …` as a literal slash command may be **CLI-only** on some versions; the desktop app and extensions can expose plugin management through a graphical panel instead. The global script install above sidesteps this entirely, since it writes the shared config every surface reads.
 
 ---
 
