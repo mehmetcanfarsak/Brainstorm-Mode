@@ -7,11 +7,11 @@ If no topic was provided with this command, ask the user for one before doing an
 
 ## Step 1 — Scope the venues BEFORE activating
 
-Before anything else, establish which venues count as acceptable primary references. Propose a concrete list appropriate to the topic's field and let the user confirm or edit it — use `AskUserQuestion` with options like:
+Before anything else, establish which venues count as acceptable primary references. Propose a concrete list appropriate to the topic's field, **then explicitly ask whether there are any other conferences or journals they'd like to add** — use `AskUserQuestion` with options like:
 
 - **"Use this list"** — your proposed top venues for the field (e.g. for ML: NeurIPS, ICML, ICLR, JMLR, TPAMI; adapt to the actual field)
-- **"Broader"** — top venues plus strong second-tier ones (name them)
-- **"Let me specify"** — the user types their own list
+- **"Add some"** — the user names extra venues to append to your list
+- **"Let me specify"** — the user gives their own list instead
 - **"No venue list"** — rely on the general quality policy only
 
 Keep it to this one question — don't interrogate.
@@ -25,6 +25,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/core/activate.py" --mode academic --venues "<comm
 ```
 
 The venue list is baked into the per-session lock, so the source-quality policy re-arrives with every single prompt for the rest of the session.
+
+**If the user broadens the venues mid-session** (e.g. "papers from XYZ are fine too"), honor it right away and persist it so it survives — run:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/core/activate.py" --add-venues "<the new venue(s)>"
+```
+
+This merges them into the active lock without resetting the session, so every later prompt reflects the broadened list.
 
 ## Step 3 — Inform the user (briefly)
 

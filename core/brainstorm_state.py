@@ -51,7 +51,9 @@ ACADEMIC_REMINDER_TEMPLATE = (
     'shape the discussion around what is actually published. Anchor each idea to specific '
     'papers (authors, venue, year); separate established findings from open gaps and say which '
     'is which. SOURCE QUALITY POLICY (non-negotiable): cite only peer-reviewed work from '
-    'reputable venues as primary references{venues_clause}. Preprints on arXiv are acceptable '
+    'reputable venues as primary references{venues_clause}. If the user names another venue as '
+    'acceptable, honor it immediately and persist it (run activate.py --add-venues "<venue>") so '
+    'this list keeps including it for the rest of the session. Preprints on arXiv are acceptable '
     'ONLY if they have been accepted to such a venue or are clearly from a credible group and '
     'directly relevant. Do NOT cite workshop papers, non-peer-reviewed preprints, or low-tier '
     'journals as primary references — vet every source against this policy before citing it. '
@@ -237,6 +239,30 @@ def claim_pending_lock(cwd, session_id):
         except OSError:
             pass
         return None
+
+
+def update_venues(cwd, session_id, add):
+    """Merge `add` into the active session's allowed-venue list (academic mode).
+
+    Lets the user broaden the venue policy mid-session; the merged list is what the
+    per-prompt reminder re-injects from then on. Preserves created_at (does not
+    reset the TTL). Returns the merged venue string, or None if no active lock.
+    """
+    lock = read_lock(cwd, session_id)
+    if not lock:
+        return None
+    parts, seen = [], set()
+    for chunk in (lock.get("venues", ""), add):
+        for p in chunk.split(","):
+            p = p.strip()
+            if p and p.lower() not in seen:
+                parts.append(p)
+                seen.add(p.lower())
+    merged = ", ".join(parts)
+    data = dict(lock)
+    data["venues"] = merged
+    _atomic_write(_lock_path(cwd, session_id), data)
+    return merged
 
 
 def cleanup_old_locks(cwd):

@@ -13,11 +13,11 @@ If no topic was provided (the line above is empty), ask the user for one before 
 
 ## Step 1 — Scope the venues BEFORE activating
 
-Before anything else, establish which venues count as acceptable primary references. Propose a concrete list appropriate to the topic's field and let the user confirm or edit it, for example:
+Before anything else, establish which venues count as acceptable primary references. Propose a concrete list appropriate to the topic's field, **then explicitly ask whether there are any other conferences or journals they'd like to add**, for example:
 
 - **"Use this list"** — your proposed top venues for the field (e.g. for ML: NeurIPS, ICML, ICLR, JMLR, TPAMI; adapt to the actual field)
-- **"Broader"** — top venues plus strong second-tier ones (name them)
-- **"Let me specify"** — the user types their own list
+- **"Add some"** — the user names extra venues to append to your list
+- **"Let me specify"** — the user gives their own list instead
 - **"No venue list"** — rely on the general quality policy only
 
 Keep it to this one question — don't interrogate.
@@ -31,6 +31,14 @@ python3 "__BRAINSTORM_ROOT__/core/activate.py" --mode academic --venues "<comma-
 ```
 
 Session id and working directory are provided through the plugin's `shell.env` hook. The venue list is baked into the per-session lock, so the source-quality policy re-arrives with every single prompt for the rest of the session.
+
+**If the user broadens the venues mid-session** (e.g. "papers from XYZ are fine too"), honor it right away and persist it so it survives — run with the `bash` tool:
+
+```bash
+python3 "__BRAINSTORM_ROOT__/core/activate.py" --add-venues "<the new venue(s)>"
+```
+
+This merges them into the active lock without resetting the session, so every later prompt reflects the broadened list.
 
 ## Step 3 — Inform the user (briefly)
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mid-session venue amendment** (academic mode) — when the user approves a venue
+  that wasn't in the original list (e.g. "papers from XYZ are fine too"), the agent
+  persists it with `activate.py --add-venues "<venue>"`. `core.update_venues()`
+  merges it into the active lock (case-insensitive dedupe, preserves `created_at`/
+  TTL), so every subsequent per-prompt reminder reflects the broadened list instead
+  of reverting to the frozen one. The academic reminder now also tells the agent to
+  honor and persist user-approved venues, and the command asks up front whether the
+  user wants to add any conferences/journals.
+
 ### Changed
 
 - **Conversational pacing** (all modes) — the per-prompt reminder now instructs the

@@ -17,11 +17,15 @@ from brainstorm_state import (
     MODES,
     cleanup_old_locks,
     read_lock,
+    update_venues,
     write_lock,
     write_pending_lock,
 )
 
-_USAGE = f"Usage: activate.py [--mode {'|'.join(MODES)}] [--venues <list>] <topic>"
+_USAGE = (
+    f"Usage: activate.py [--mode {'|'.join(MODES)}] [--venues <list>] <topic>\n"
+    "       activate.py --add-venues <list>   (amend the active session's venues)"
+)
 
 
 def main(argv=None, env=None):
@@ -32,7 +36,8 @@ def main(argv=None, env=None):
     args = list(argv[1:])
     mode = DEFAULT_MODE
     venues = None
-    while args and args[0] in ("--mode", "--venues"):
+    add_venues = None
+    while args and args[0] in ("--mode", "--venues", "--add-venues"):
         flag = args.pop(0)
         if not args:
             print(_USAGE, file=sys.stderr)
@@ -43,16 +48,35 @@ def main(argv=None, env=None):
                 print(_USAGE, file=sys.stderr)
                 return 1
             mode = value
-        else:
+        elif flag == "--venues":
             venues = value
+        else:
+            add_venues = value
+
+    cwd = env.get("BRAINSTORM_CWD") or env.get("CLAUDE_CWD") or os.getcwd()
+    session_id = (env.get("BRAINSTORM_SESSION_ID") or env.get("CLAUDE_SESSION_ID", "")).strip()
+
+    # Mid-session amendment: broaden the allowed venues of the active lock. No topic needed.
+    if add_venues is not None:
+        if not session_id:
+            print("activate.py error: --add-venues needs an active session id.", file=sys.stderr)
+            return 1
+        try:
+            merged = update_venues(cwd, session_id, add_venues)
+        except Exception as e:
+            print(f"activate.py error: {e}", file=sys.stderr)
+            return 1
+        if merged is None:
+            print("No active brainstorm session to amend.")
+        else:
+            print(f"Allowed venues updated: {merged}")
+        return 0
 
     if not args:
         print(_USAGE, file=sys.stderr)
         return 1
 
     topic = " ".join(args)
-    cwd = env.get("BRAINSTORM_CWD") or env.get("CLAUDE_CWD") or os.getcwd()
-    session_id = (env.get("BRAINSTORM_SESSION_ID") or env.get("CLAUDE_SESSION_ID", "")).strip()
     label = "Brainstorm mode" if mode == DEFAULT_MODE else f"Brainstorm mode ({mode})"
 
     try:

@@ -349,6 +349,12 @@ class TestActivate(unittest.TestCase):
             rc = activate_mod.main(argv=["activate.py"] + topic_args, env=env)
         return buf.getvalue(), rc
 
+    def _run_env(self, env, args):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py"] + args, env=env)
+        return buf.getvalue(), rc
+
     def test_creates_lock_with_session_id(self):
         with tempfile.TemporaryDirectory() as cwd:
             out, rc = self._run(cwd, "sess-abc", ["my topic"])
@@ -474,6 +480,45 @@ class TestActivate(unittest.TestCase):
             data = json.loads((_locks_dir(cwd) / "_pending.json").read_text())
             self.assertEqual(data["venues"], "TPAMI")
 
+    # ── --add-venues (mid-session amendment) ──────────────────────────────────
+
+    def test_add_venues_amends_active_lock(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            env = {"BRAINSTORM_CWD": str(cwd), "BRAINSTORM_SESSION_ID": "s1"}
+            self._run_env(env, ["--mode", "academic", "--venues", "NeurIPS", "topic"])
+            out, rc = self._run_env(env, ["--add-venues", "XYZ"])
+            self.assertEqual(rc, 0)
+            self.assertIn("XYZ", out)
+            self.assertEqual(bs.read_lock(str(cwd), "s1")["venues"], "NeurIPS, XYZ")
+
+    def test_add_venues_no_active_session(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            env = {"BRAINSTORM_CWD": str(cwd), "BRAINSTORM_SESSION_ID": "s1"}
+            out, rc = self._run_env(env, ["--add-venues", "XYZ"])
+            self.assertEqual(rc, 0)
+            self.assertIn("No active", out)
+
+    def test_add_venues_requires_session_id(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py", "--add-venues", "XYZ"], env={})
+        self.assertEqual(rc, 1)
+
+    def test_add_venues_missing_value_errors(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = activate_mod.main(argv=["activate.py", "--add-venues"], env={})
+        self.assertEqual(rc, 1)
+
+    def test_add_venues_exception_returns_error(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            env = {"BRAINSTORM_CWD": str(cwd), "BRAINSTORM_SESSION_ID": "s1"}
+            buf = io.StringIO()
+            with patch("activate.update_venues", side_effect=RuntimeError("boom")):
+                with redirect_stdout(buf):
+                    rc = activate_mod.main(argv=["activate.py", "--add-venues", "X"], env=env)
+            self.assertEqual(rc, 1)
+
 
 # ── Tests: deactivate.py ──────────────────────────────────────────────────────
 
@@ -590,6 +635,33 @@ class TestBrainstormState(unittest.TestCase):
             bs.write_pending_lock(cwd, "topic", "academic", "NeurIPS")
             bs.claim_pending_lock(cwd, "s1")
             self.assertEqual(bs.read_lock(cwd, "s1")["venues"], "NeurIPS")
+
+    def test_update_venues_appends(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "academic", "NeurIPS, ICML")
+            merged = bs.update_venues(cwd, "s1", "XYZ, TPAMI")
+            self.assertEqual(merged, "NeurIPS, ICML, XYZ, TPAMI")
+            self.assertEqual(bs.read_lock(cwd, "s1")["venues"], "NeurIPS, ICML, XYZ, TPAMI")
+
+    def test_update_venues_dedupes_case_insensitively(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "academic", "NeurIPS")
+            self.assertEqual(bs.update_venues(cwd, "s1", "neurips, ICML"), "NeurIPS, ICML")
+
+    def test_update_venues_from_empty(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            bs.write_lock(cwd, "s1", "topic", "academic")  # no venues yet
+            self.assertEqual(bs.update_venues(cwd, "s1", "JMLR"), "JMLR")
+
+    def test_update_venues_preserves_created_at(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            lock = bs.write_lock(cwd, "s1", "topic", "academic", "NeurIPS")
+            bs.update_venues(cwd, "s1", "ICML")
+            self.assertEqual(bs.read_lock(cwd, "s1")["created_at"], lock["created_at"])
+
+    def test_update_venues_no_lock_returns_none(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertIsNone(bs.update_venues(cwd, "nope", "ICML"))
 
     def test_write_lock_invalid_mode_falls_back(self):
         with tempfile.TemporaryDirectory() as cwd:
