@@ -344,12 +344,15 @@ class TestActivate(unittest.TestCase):
 
     def _run(self, cwd, session_id, topic_args):
         buf = io.StringIO()
-        env = {"CLAUDE_CWD": str(cwd), "CLAUDE_SESSION_ID": session_id}
+        # HOME → cwd so config discovery stays hermetic (no real ~/.config read).
+        env = {"CLAUDE_CWD": str(cwd), "CLAUDE_SESSION_ID": session_id, "HOME": str(cwd)}
         with redirect_stdout(buf):
             rc = activate_mod.main(argv=["activate.py"] + topic_args, env=env)
         return buf.getvalue(), rc
 
     def _run_env(self, env, args):
+        cwd = env.get("BRAINSTORM_CWD") or env.get("CLAUDE_CWD") or ""
+        env = {"HOME": cwd, **env}  # default HOME → cwd; caller can override
         buf = io.StringIO()
         with redirect_stdout(buf):
             rc = activate_mod.main(argv=["activate.py"] + args, env=env)
@@ -518,6 +521,84 @@ class TestActivate(unittest.TestCase):
                 with redirect_stdout(buf):
                     rc = activate_mod.main(argv=["activate.py", "--add-venues", "X"], env=env)
             self.assertEqual(rc, 1)
+
+    # ── venue presets from config (.brainstorm / ~/.config/brainstorm/config) ──
+
+    def test_academic_uses_config_venue_preset(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            Path(cwd, ".brainstorm").write_text("venues: NeurIPS, ICML\n")
+            env = {"CLAUDE_CWD": cwd, "CLAUDE_SESSION_ID": "s1", "HOME": cwd}
+            self._run_env(env, ["--mode", "academic", "diffusion"])
+            self.assertEqual(bs.read_lock(cwd, "s1")["venues"], "NeurIPS, ICML")
+
+    def test_explicit_venues_override_config_preset(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            Path(cwd, ".brainstorm").write_text("venues: NeurIPS\n")
+            env = {"CLAUDE_CWD": cwd, "CLAUDE_SESSION_ID": "s1", "HOME": cwd}
+            self._run_env(env, ["--mode", "academic", "--venues", "JMLR", "topic"])
+            self.assertEqual(bs.read_lock(cwd, "s1")["venues"], "JMLR")
+
+    def test_empty_venues_opts_out_of_config_preset(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            Path(cwd, ".brainstorm").write_text("venues: NeurIPS\n")
+            env = {"CLAUDE_CWD": cwd, "CLAUDE_SESSION_ID": "s1", "HOME": cwd}
+            self._run_env(env, ["--mode", "academic", "--venues", "", "topic"])
+            self.assertNotIn("venues", bs.read_lock(cwd, "s1"))
+
+    def test_config_preset_ignored_for_divergent(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            Path(cwd, ".brainstorm").write_text("venues: NeurIPS\n")
+            env = {"CLAUDE_CWD": cwd, "CLAUDE_SESSION_ID": "s1", "HOME": cwd}
+            self._run_env(env, ["topic"])  # divergent — venues irrelevant
+            self.assertNotIn("venues", bs.read_lock(cwd, "s1"))
+
+
+class TestBrainstormConfig(unittest.TestCase):
+
+    def test_no_config_returns_empty(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(bs.load_brainstorm_config(cwd, {"HOME": cwd}), {})
+
+    def test_project_config(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            Path(cwd, ".brainstorm").write_text("venues: NeurIPS, ICML\nmode: academic\n")
+            cfg = bs.load_brainstorm_config(cwd, {"HOME": cwd})
+            self.assertEqual(cfg["venues"], "NeurIPS, ICML")
+            self.assertEqual(cfg["mode"], "academic")
+
+    def test_global_and_project_merge(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as cwd:
+            gdir = Path(home, ".config", "brainstorm")
+            gdir.mkdir(parents=True)
+            (gdir / "config").write_text("# defaults\nvenues: NeurIPS, ICML\nmode: academic\n")
+            Path(cwd, ".brainstorm").write_text("venues: ICML, XYZ\nmode: actionable\n")
+            cfg = bs.load_brainstorm_config(cwd, {"HOME": home})
+            self.assertEqual(cfg["venues"], "NeurIPS, ICML, XYZ")  # union, ICML deduped
+            self.assertEqual(cfg["mode"], "actionable")            # project overrides
+
+    def test_xdg_config_home_respected(self):
+        with tempfile.TemporaryDirectory() as xdg, tempfile.TemporaryDirectory() as cwd:
+            gdir = Path(xdg, "brainstorm")
+            gdir.mkdir(parents=True)
+            (gdir / "config").write_text("venues: JMLR\n")
+            cfg = bs.load_brainstorm_config(cwd, {"XDG_CONFIG_HOME": xdg})
+            self.assertEqual(cfg["venues"], "JMLR")
+
+    def test_parse_ignores_comments_blanks_and_malformed(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            Path(cwd, ".brainstorm").write_text(
+                "# comment\n\nno-colon-line\nvenues: A\nemptyval:\n:emptykey\n")
+            self.assertEqual(bs.load_brainstorm_config(cwd, {"HOME": cwd}), {"venues": "A"})
+
+    def test_unreadable_config_skipped(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            os.mkdir(os.path.join(cwd, ".brainstorm"))  # a dir → open() raises OSError
+            self.assertEqual(bs.load_brainstorm_config(cwd, {"HOME": cwd}), {})
+
+    def test_default_env_uses_os_environ(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            # No env passed → falls back to os.environ; just assert it doesn't raise.
+            self.assertIsInstance(bs.load_brainstorm_config(cwd), dict)
 
 
 # ── Tests: deactivate.py ──────────────────────────────────────────────────────

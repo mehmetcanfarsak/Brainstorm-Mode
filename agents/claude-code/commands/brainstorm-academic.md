@@ -16,6 +16,8 @@ Before anything else, establish which venues count as acceptable primary referen
 
 Keep it to this one question — don't interrogate.
 
+> **Saved presets:** if the user keeps a venue list in `.brainstorm` (project root) or `~/.config/brainstorm/config` (user-global), `activate.py` applies it automatically when you omit `--venues`. In that case, just show the configured list and ask only whether to add anything — don't re-derive it. To deliberately use *no* venue list (ignoring any preset), pass `--venues ""`.
+
 ## Step 2 — Activate the lock
 
 Run the following command (replace placeholders; omit `--venues` if the user chose no list):

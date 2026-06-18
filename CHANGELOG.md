@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Venue presets via layered config** (academic mode) — keep a default venue
+  list in `~/.config/brainstorm/config` (user-global) and/or `<project>/.brainstorm`
+  (per-project), layered like `CLAUDE.md`: the two are merged (venues unioned,
+  case-insensitive dedupe, global first). `/brainstorm-academic` applies the merged
+  list automatically when `--venues` is omitted; pass `--venues ""` to opt out.
+  New `core.load_brainstorm_config()`; config format is `key: value` lines with
+  `#` comments (only `venues` is consumed today).
+
 - **Mid-session venue amendment** (academic mode) — when the user approves a venue
   that wasn't in the original list (e.g. "papers from XYZ are fine too"), the agent
   persists it with `activate.py --add-venues "<venue>"`. `core.update_venues()`

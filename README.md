@@ -206,6 +206,21 @@ At session start the agent proposes a venue list for your field (e.g. NeurIPS, I
 
 This is the part a prompt or skill cannot deliver: instructions like these normally decay as the session grows and vanish at compaction — which is precisely when low-quality citations creep back in. Here the policy lives in the on-disk lock and re-arrives with every turn, so **it cannot be skipped, forgotten, or compacted away**. `/brainstorm-done` closes with open research questions and a vetted reading list, archived to disk.
 
+Two conveniences for venues:
+
+- **Add mid-session.** Approve a venue that wasn't on the list ("papers from XYZ are fine too") and the agent persists it — every later prompt reflects the broadened list, without resetting the session.
+- **Saved presets, layered like `CLAUDE.md`.** Keep a default venue list in a config file so you don't re-type it each session. Two locations are merged (per-project augments user-global):
+
+  ```
+  # ~/.config/brainstorm/config   — your field's defaults, all projects
+  venues: NeurIPS, ICML, ICLR, JMLR, TPAMI
+
+  # <project>/.brainstorm          — extra venues for this project (unioned in)
+  venues: CVPR, ICCV
+  ```
+
+  `/brainstorm-academic` applies the merged list automatically when you don't pass an explicit list; the agent just shows it and asks whether to add anything. (Format: `key: value` lines, `#` comments; only `venues` is used today.)
+
 ### Ending a brainstorm session
 
 ```
@@ -318,7 +333,7 @@ Brainstorm-Mode/
 │
 ├── tests/
 │   ├── fixtures/                      # Example hook-input JSON for manual testing
-│   └── run_tests.py                   # 162 tests, 100% line coverage, stdlib only
+│   └── run_tests.py                   # 185 tests, 100% line coverage, stdlib only
 │
 ├── .claude-plugin/
 │   ├── plugin.json                    # Claude Code plugin manifest
@@ -414,7 +429,7 @@ Key things to verify for each new agent: hook event names, tool name strings, th
 ## Testing
 
 ```bash
-make test       # run all 162 tests (no extra dependencies)
+make test       # run all 185 tests (no extra dependencies)
 make coverage   # run tests and print line coverage (100%)
 make clean      # remove __pycache__ and coverage artifacts
 ```

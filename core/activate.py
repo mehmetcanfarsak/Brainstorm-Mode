@@ -16,6 +16,7 @@ from brainstorm_state import (
     DEFAULT_MODE,
     MODES,
     cleanup_old_locks,
+    load_brainstorm_config,
     read_lock,
     update_venues,
     write_lock,
@@ -77,6 +78,11 @@ def main(argv=None, env=None):
         return 1
 
     topic = " ".join(args)
+    # Academic sessions with no explicit --venues fall back to the configured
+    # venue preset (.brainstorm / ~/.config/brainstorm/config). Pass --venues ""
+    # to opt out explicitly.
+    if venues is None and mode == "academic":
+        venues = load_brainstorm_config(cwd, env).get("venues")
     label = "Brainstorm mode" if mode == DEFAULT_MODE else f"Brainstorm mode ({mode})"
 
     try:

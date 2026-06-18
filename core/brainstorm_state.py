@@ -121,6 +121,27 @@ def _slug(topic):
     parts = [p for p in cleaned.split("-") if p]
     return ("-".join(parts))[:60] or "session"
 
+def _config_paths(cwd, env):
+    """Brainstorm config files, user-global first then per-project (project augments)."""
+    base = env.get("XDG_CONFIG_HOME") or os.path.join(env.get("HOME") or os.path.expanduser("~"), ".config")
+    return [
+        os.path.join(base, "brainstorm", "config"),
+        os.path.join(cwd, ".brainstorm"),
+    ]
+
+def _parse_config(text):
+    """Parse a brainstorm config file: 'key: value' lines; '#' comments and blanks ignored."""
+    out = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key, value = key.strip().lower(), value.strip()
+        if key and value:
+            out[key] = value
+    return out
+
 def _now_utc():
     return datetime.now(timezone.utc)
 
@@ -262,6 +283,38 @@ def update_venues(cwd, session_id, add):
     data = dict(lock)
     data["venues"] = merged
     _atomic_write(_lock_path(cwd, session_id), data)
+    return merged
+
+
+def load_brainstorm_config(cwd, env=None):
+    """Merge brainstorm defaults from the user-global and per-project config files.
+
+    Layered like CLAUDE.md: the per-project ``.brainstorm`` augments the user-global
+    ``$XDG_CONFIG_HOME/brainstorm/config`` (or ``~/.config/brainstorm/config``).
+    ``venues`` from both files are unioned (case-insensitive dedupe, global first);
+    any other key takes the per-project value. Best-effort — missing or unreadable
+    files are skipped. Returns a (possibly empty) dict.
+    """
+    env = os.environ if env is None else env
+    merged = {}
+    venue_parts, venue_seen = [], set()
+    for path in _config_paths(cwd, env):
+        try:
+            with open(path) as f:
+                cfg = _parse_config(f.read())
+        except OSError:
+            continue
+        for key, value in cfg.items():
+            if key == "venues":
+                for p in value.split(","):
+                    p = p.strip()
+                    if p and p.lower() not in venue_seen:
+                        venue_parts.append(p)
+                        venue_seen.add(p.lower())
+            else:
+                merged[key] = value
+    if venue_parts:
+        merged["venues"] = ", ".join(venue_parts)
     return merged
 
 
