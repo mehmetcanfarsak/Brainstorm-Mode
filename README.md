@@ -117,7 +117,7 @@ That's it — the commands and hooks are registered automatically, no `jq` or sh
 To pin a specific version or branch:
 
 ```
-/plugin marketplace add mehmetcanfarsak/Brainstorm-Mode#v1.0.0
+/plugin marketplace add mehmetcanfarsak/Brainstorm-Mode#v1.1.0
 ```
 
 ### Option B — Install script

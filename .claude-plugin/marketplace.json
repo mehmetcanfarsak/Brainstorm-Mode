@@ -1,7 +1,7 @@
 {
   "name": "brainstorm-mode",
   "description": "Marketplace for brainstorm-mode — enforceable ideation mode for Claude Code and other AI coding agents.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "owner": {
     "name": "Mehmet Can Farsak",
     "url": "https://github.com/mehmetcanfarsak"
@@ -11,7 +11,7 @@
       "name": "brainstorm-mode",
       "source": "./",
       "description": "Block file-editing tools at the hook layer and re-inject the brainstorming constraint on every prompt, so ideation mode survives context compaction and can't be talked out of.",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "Mehmet Can Farsak",
         "url": "https://github.com/mehmetcanfarsak"
