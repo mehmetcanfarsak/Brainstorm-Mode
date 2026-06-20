@@ -4,7 +4,9 @@
  * Loads the real plugin (agents/opencode/plugin/brainstorm-mode.ts) and drives
  * each hook against the real Python core — no LLM required. Verifies the
  * plugin↔python boundary end to end: activate → block edit / allow bash /
- * inject reminder / re-anchor on compaction / expose env → deactivate → unblock.
+ * inject reminder / re-anchor on compaction / expose env → deactivate → unblock,
+ * plus the v1.1.0 modes (academic venue policy, mid-session --add-venues,
+ * actionable) flowing through chat.message.
  *
  * Run with:  bun tests/opencode_smoke.ts
  */
@@ -117,6 +119,36 @@ try {
     threwAfter = true
   }
   check("edit allowed after /brainstorm-done", !threwAfter)
+
+  // 9) academic mode: the venue policy flows through chat.message end to end.
+  const ACAD = "smoke-academic"
+  const a = py("activate.py", ["--mode", "academic", "--venues", "NeurIPS, ICML", "robustness"],
+               { BRAINSTORM_SESSION_ID: ACAD })
+  check("academic activate exits 0", a.status === 0)
+  const oa: any = { parts: [{ type: "text", text: "go", id: "p" }] }
+  await hooks["chat.message"]({ sessionID: ACAD }, oa)
+  const at: string = oa.parts[0].text
+  check(
+    "academic reminder carries venue policy",
+    at.includes("(academic)") && at.includes("allowed venues: NeurIPS, ICML") && at.includes("peer-reviewed"),
+  )
+  check(
+    "academic reminder carries citation-honesty + pacing",
+    at.includes("CITATION HONESTY") && at.includes("ONE question"),
+  )
+
+  // 10) mid-session --add-venues is reflected on the next chat.message.
+  py("activate.py", ["--add-venues", "XYZ Conf"], { BRAINSTORM_SESSION_ID: ACAD })
+  const oa2: any = { parts: [{ type: "text", text: "go", id: "p" }] }
+  await hooks["chat.message"]({ sessionID: ACAD }, oa2)
+  check("mid-session --add-venues reflected in reminder", oa2.parts[0].text.includes("XYZ Conf"))
+
+  // 11) actionable mode reminder flows through too.
+  const ACT = "smoke-actionable"
+  py("activate.py", ["--mode", "actionable", "ship the newsletter"], { BRAINSTORM_SESSION_ID: ACT })
+  const ob: any = { parts: [{ type: "text", text: "go", id: "p" }] }
+  await hooks["chat.message"]({ sessionID: ACT }, ob)
+  check("actionable reminder injected", ob.parts[0].text.includes("(actionable)"))
 } finally {
   rmSync(cwd, { recursive: true, force: true })
 }
